@@ -18,7 +18,7 @@
 const path = require("path");
 const fs = require("fs");
 const { spawn, execFile } = require("child_process");
-const { createHash } = require("crypto");
+const { createHash, randomBytes } = require("crypto");
 const { app, BrowserWindow, webContents } = require("electron");
 const { fileURLToPath } = require("url");
 
@@ -109,8 +109,26 @@ function hotReloadIfChanged() {
   }
 }
 
+const windowDocuments = new WeakMap();
+function windowDocument(wc) { return windowDocuments.get(wc) || 0; }
+function sameWindowDocument(wc, generation) {
+  return isMainWindowState(wc) && windowDocument(wc) === generation;
+}
+function revokeWindow(wc) {
+  windowDocuments.set(wc, windowDocument(wc) + 1);
+  clearWindowState(wc.id);
+}
 function isMainWindowState(wc) {
-  try { return wc.getType() === "window"; } catch (e) { return false; }
+  try { return !!wc && !wc.isDestroyed() && wc.getType() === "window" &&
+    !(wc.isLoadingMainFrame && wc.isLoadingMainFrame()) && trustedLocalUrl(wc.getURL()); }
+  catch (e) { return false; }
+}
+function trustedLocalUrl(url) {
+  try {
+    if (typeof url !== "string" || !url.startsWith("file:")) return false;
+    const relative = path.relative(process.resourcesPath, fileURLToPath(url));
+    return !!relative && !relative.startsWith("..") && !path.isAbsolute(relative);
+  } catch (e) { return false; }
 }
 
 function pushOnce(wc, payload) {
@@ -144,12 +162,12 @@ const scopeBindings = new Map();
 const remoteEvidence = new Map();
 function trustedSender(e) {
   try {
-    if (!e || !e.sender || e.sender.isDestroyed() || !isMainWindowState(e.sender)) return false;
-    const url = e.sender.getURL();
-    if (!url.startsWith("file:")) return false;
-    const relative = path.relative(process.resourcesPath, fileURLToPath(url));
-    return !relative.startsWith("..") && !path.isAbsolute(relative);
+    return !!e && isMainWindowState(e.sender) && !!e.senderFrame &&
+      e.senderFrame === e.sender.mainFrame && trustedLocalUrl(e.senderFrame.url);
   } catch (e) { return false; }
+}
+function clearWindowState(id) {
+  for (const map of [activeSid, windowWorkspaces, windowTasks, scopeBindings, remoteEvidence]) map.delete(id);
 }
 try {
   const { ipcMain } = require("electron");
@@ -183,7 +201,7 @@ try {
     scheduleRetry(300);
   });
   ipcMain.on(IPC_ACTIVE_SID, (e, sid) => {
-    if (!e || !e.sender || e.sender.isDestroyed()) return;
+    if (!trustedSender(e)) return;
     const s = typeof sid === "string" ? sid.trim() : "";
     const val = s && s.length <= 255 && /^[A-Za-z0-9_-]+$/.test(s) ? s : "";
     const prev = activeSid.get(e.sender.id);
@@ -245,7 +263,7 @@ let lastHadRemote = false;
 
 function remoteDisabled() {
   const remote = readCfgCached().remote || {};
-  return remote.auto === false && remote.enabled === false;
+  return remote.auto !== true && remote.enabled !== true;
 }
 function clearRemoteRecovery() {
   remoteSids.clear();
@@ -254,12 +272,27 @@ function clearRemoteRecovery() {
   clearTimeout(retryTimer);
   retryTimer = 0;
 }
+let lastGoodPayload = null, lastSuccessAt = 0;
+function validUsagePayload(payload) {
+  return !!payload && typeof payload === "object" && !Array.isArray(payload) && !payload.error &&
+    Array.isArray(payload.recent) && payload.recent.every(r => !!r && typeof r === "object" && !Array.isArray(r)) &&
+    (payload.today === undefined || !!payload.today && typeof payload.today === "object" && !Array.isArray(payload.today));
+}
 function handlePayload(payload) {
   const disabled = remoteDisabled();
   if (disabled) clearRemoteRecovery();
   // serve 的 error 是查询失败，不是空快照；不可清掉重试状态和最后成功数据显示。
-  if (!payload || typeof payload !== "object" || payload.error) return;
+  if (!validUsagePayload(payload)) {
+    const failed = Object.assign({}, lastGoodPayload || { recent: [], today: {} }, {
+      data_health: { state: lastGoodPayload ? "stale" : "unavailable", updated_at: lastSuccessAt, reason: "query_failed" },
+    });
+    for (const wc of webContents.getAllWebContents()) pushOnce(wc, failed);
+    return;
+  }
   const now = Date.now();
+  lastSuccessAt = now;
+  payload = Object.assign({}, payload, { data_health: { state: "fresh", updated_at: now } });
+  lastGoodPayload = payload;
   const marks = new Set();
   for (const r of (payload.recent || [])) if (r && r.remote && r.sid && !r.remote_error && !r.remote_missing) {
     const key = scopeKey(r.sid, r.workspace_identity);
@@ -279,7 +312,7 @@ function handlePayload(payload) {
     const [sid, identity] = JSON.parse(key);
     if (marks.has(key)) { pendingSids.delete(key); continue; }
     const remote = readCfgCached().remote || {};
-    if (identity && !(remote.auto === false && remote.enabled === false) || (notLocal.has(sid) && payload.remote_enabled && remote.enabled === true)) pendingSids.set(key, now + poll);
+    if (identity && (remote.auto === true || remote.enabled === true) || (notLocal.has(sid) && payload.remote_enabled && remote.enabled === true)) pendingSids.set(key, now + poll);
     else { pendingSids.delete(key); remoteSids.delete(key); }
   }
   for (const key of pendingSids.keys()) if (!keys.includes(key)) pendingSids.delete(key);
@@ -292,26 +325,56 @@ function handlePayload(payload) {
     for (const wc of webContents.getAllWebContents()) {
       if (!isMainWindowState(wc) || wc.isDestroyed()) continue;
       const file = path.join(HERE, "diag-" + idx + ".json");
+      const generation = windowDocument(wc);
       idx++;
       wc.executeJavaScript("JSON.stringify(window.__zusageDiag||null)", true)
         .then((s) => {
-          if (s && s !== "null") {
+          if (sameWindowDocument(wc, generation) && s && s !== "null") {
             try {
-              const obj = JSON.parse(s);
-              obj.pump = {
-                version: 10,
-                resident: !!pyRes,
-                activeMap: Array.from(activeSid.entries()).slice(0, 12),
-                wants: lastWants,
-              };
-              fs.writeFileSync(file, JSON.stringify(obj));
-            } catch (e2) {
-              try { fs.writeFileSync(file, s); } catch (e) { }
-            }
+              writeDiagnostic(file, JSON.parse(s));
+            } catch (e2) { /* 不落盘未校验的原文，包括解析/写入失败时。 */ }
           }
         })
         .catch(() => { });
     }
+  }
+}
+
+/* 诊断是跨 renderer 的不可信输入。只保留固定版本/枚举、数值与错误存在性；
+ * 禁止复制 storage、正文、路径、URL、scope/SID 或异常原文，兼容旧浮层也不放行。 */
+function diagnosticSnapshot(diag) {
+  if (!diag || typeof diag !== "object" || Array.isArray(diag)) throw new TypeError("Invalid diagnostic snapshot");
+  const mount = diag.mount && typeof diag.mount === "object" && !Array.isArray(diag.mount) ? diag.mount : null;
+  const version = mount && mount.version || diag.version;
+  const result = {
+    schemaVersion: 2, time: new Date().toISOString(),
+    version: typeof version === "string" && /^v[0-9]{1,6}$/.test(version) ? version : "unknown",
+    mounted: !!mount,
+    errors: ["fatal", "updateErr", "detErr", "coordErr", "trackErr"].filter(key => typeof diag[key] === "string" && diag[key].length > 0),
+    pump: { version: 10, resident: !!pyRes, activeWindows: activeSid.size,
+      requestedSessions: lastRequest.sids.length, requestedScopes: lastRequest.scopes.length },
+  };
+  if (mount) {
+    result.mount = {
+      mode: ["in-card", "below-card"].includes(mount.mode) ? mount.mode : "unknown",
+      theme: ["dark", "light"].includes(mount.theme) ? mount.theme : "unknown",
+    };
+    for (const key of ["composerRect", "anchorRect", "barRect"]) {
+      const rect = mount[key];
+      if (Array.isArray(rect) && rect.length === 4 && rect.every(n => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 10000000)) result.mount[key] = rect;
+    }
+  }
+  return result;
+}
+
+function writeDiagnostic(file, diag) {
+  const text = JSON.stringify(diagnosticSnapshot(diag));
+  const tmp = file + ".tmp-" + process.pid + "-" + randomBytes(8).toString("hex");
+  try {
+    fs.writeFileSync(tmp, text, { flag: "wx", mode: 0o600 });
+    fs.renameSync(tmp, file); // 替换旧文件/符号链接，不跟随链接写入其它目标。
+  } finally {
+    try { fs.unlinkSync(tmp); } catch (e) { if (e.code !== "ENOENT") LOG("diagnostic temporary file cleanup failed"); }
   }
 }
 
@@ -411,15 +474,20 @@ function runQuery(request) {
     settled = true;
     busy = false;
     const keys = requestKeys(request);
-    if (payload && !payload.error) {
+    const failed = !validUsagePayload(payload);
+    if (!failed) {
       if (!shuttingDown && hasWindows()) handlePayload(payload);
-    } else if (remoteDisabled()) {
-      clearRemoteRecovery();
     } else {
-      for (const key of keys) pendingSids.set(key, Date.now() + remotePollMs());
-      lastHadRemote = keys.length > 0;
+      if (!shuttingDown && hasWindows()) handlePayload(null);
+      if (remoteDisabled()) clearRemoteRecovery();
+      else {
+        for (const key of keys) pendingSids.set(key, Date.now() + remotePollMs());
+        lastHadRemote = keys.length > 0;
+      }
     }
-    if (!shuttingDown && lastHadRemote && hasWindows()) scheduleRetry(remotePollMs());
+    const localFailed = !!(payload && payload.local_error);
+    if (failed || localFailed) lastStamp = 0; // 无新写入时也能恢复失败的本地查询。
+    if (!shuttingDown && (failed || localFailed || lastHadRemote) && hasWindows()) scheduleRetry(remotePollMs());
     armResidentIdle();
   };
   const line = JSON.stringify(request);
@@ -514,6 +582,7 @@ function maybeSpawn() {
    * mine 模式下 WantSid 已非主数据源，省掉活跃期每 1.5s × N 窗口的页面求值。 */
   const wcs = webContents.getAllWebContents().filter((wc) => isMainWindowState(wc) && !wc.isDestroyed());
   if (!wcs.length) return;
+  const generations = wcs.map(windowDocument);
   const liveIds = new Set(wcs.map((wc) => wc.id));
   for (const id of activeSid.keys()) if (!liveIds.has(id)) activeSid.delete(id);
   for (const id of remoteEvidence.keys()) if (!liveIds.has(id)) remoteEvidence.delete(id);
@@ -529,7 +598,8 @@ function maybeSpawn() {
   const readWantsJs = '(function(){var a=window.__zusageWantSids;if(!a||!a.length){a=window.__zusageWantSid?[window.__zusageWantSid]:[]}return JSON.stringify({s:a,w:window.__zusageSidWs||{},p:window.__zusagePaneScopes||{}})})()';
   /* Promise.resolve().then 包裹：renderer 同步销毁时 executeJavaScript 直接 throw，
    * 转成 rejected promise 交给 catch 吞掉，别把整轮收集锁死 */
-  Promise.all(wcs.map((wc) => withTimeout(Promise.resolve().then(() => wc.executeJavaScript(readWantsJs, true)).catch(() => ""), 1000)))
+  Promise.all(wcs.map((wc, i) => withTimeout(Promise.resolve().then(() =>
+    sameWindowDocument(wc, generations[i]) ? wc.executeJavaScript(readWantsJs, true) : "").catch(() => ""), 1000)))
     .then((vals) => {
       if (shuttingDown || !hasWindows()) { stopResident(); return; }
       /* 汇总全部窗口的全部 pane 会话（去重）：request.sids 无 identity、
@@ -541,6 +611,7 @@ function maybeSpawn() {
         } else if (!request.sids.includes(sid)) request.sids.push(sid);
       };
       wcs.forEach((wc, i) => {
+        if (!sameWindowDocument(wc, generations[i])) return;
         let parsed = {};
         try { parsed = JSON.parse(vals[i] || "{}"); } catch (e) { }
         const wants = Array.isArray(parsed.s) ? parsed.s.slice() : [];
@@ -711,8 +782,10 @@ async function setAnswerRateLine(enabled) {
  * 的旁路查询，不占用泵的 stdin 行协议。查不到（数据库还没追上/没有有效提问时刻/
  * 这一轮已被新提问越过）时回推空串，不是错误，渲染端据此限流重试。 */
 function queryTurnText(sid, wc, plainUnits) {
+  if (!isMainWindowState(wc)) return;
+  const generation = windowDocument(wc);
   const deliver = (text) => {
-    if (!wc || wc.isDestroyed()) return;
+    if (!sameWindowDocument(wc, generation)) return;
     wc.executeJavaScript("window.__zusageDeliverTurnText && window.__zusageDeliverTurnText(" +
       JSON.stringify(sid) + "," + JSON.stringify(text || "") + ")", true).catch(() => { });
   };
@@ -749,16 +822,12 @@ async function pollPluginRequests() {
     for (const wc of webContents.getAllWebContents()) {
       if (!isMainWindowState(wc) || wc.isDestroyed()) continue;
       // 仅在宿主本地窗口读取固定动作；外部网页不能触发插件更新或配置写入。
-      const url = wc.getURL();
-      if (!url.startsWith("file:")) continue;
-      const local = fileURLToPath(url);
-      const relative = path.relative(process.resourcesPath, local);
-      if (relative.startsWith("..") || path.isAbsolute(relative)) continue;
+      const generation = windowDocument(wc);
       const requests = await Promise.race([
         wc.executeJavaScript('(function(){var q=window.__zusagePluginRequests;return Array.isArray(q)?q.splice(0,8):[]})()', true),
         new Promise((resolve) => setTimeout(() => resolve([]), 1000)),
       ]);
-      if (!Array.isArray(requests)) continue;
+      if (!sameWindowDocument(wc, generation) || !Array.isArray(requests)) continue;
       for (const req of requests) {
         if (req && ["auto", "check", "update"].includes(req.action)) {
           if (pluginUpdater) pluginUpdater.request(req).catch((e) => LOG("plugin update action failed:", e.message));
@@ -778,19 +847,21 @@ if (pluginUpdater) pluginUpdater.tick().catch((e) => LOG("plugin auto update:", 
 
 function injectOverlay(wc, reload = false) {
   if (!overlaySrc || !isMainWindowState(wc) || wc.isDestroyed()) return;
+  const generation = windowDocument(wc);
   const cleanup = '(function(){if(window.__zusageDispose)window.__zusageDispose();else{document.querySelectorAll(".zusage-root,.zusage-tip-root,.zusage-exc").forEach(function(e){e.remove()});if(window.__zusageRateCleanup)window.__zusageRateCleanup()}window.__zusageOverlay=false;})();\n';
   /* turn-stats.js 先于 overlay.js 注入（IIFE 幂等，重复执行只是重挂 ZUsageTurnStats）：
    * overlay 启动即读取该全局做实时/确定性统计；overlay 缺它时自动降级为 DB 轮询路径。 */
   wc.executeJavaScript((reload ? cleanup : "") + turnStatsSrc + "\n" + overlaySrc, true).then(() => {
     /* 无条件推送：updater 不可用时也要让面板拿到 rateLine 真值（缺省开） */
-    pushPluginState(wc, pluginUpdater ? pluginUpdater.status() : {});
+    if (sameWindowDocument(wc, generation)) pushPluginState(wc, pluginUpdater ? pluginUpdater.status() : {});
   }).catch(() => { });
 }
 
 const hook = (wc) => {
-  if (!isMainWindowState(wc)) return;
+  // 新窗口先是 about:blank；先监听加载事件，执行页面操作时再验证当前来源。
+  try { if (wc.getType() !== "window") return; } catch (e) { return; }
   wc.on("destroyed", () => {
-    activeSid.delete(wc.id);
+    revokeWindow(wc);
     if (!hasWindows()) {
       clearTimeout(retryTimer);
       lastHadRemote = false;
@@ -799,7 +870,16 @@ const hook = (wc) => {
       stopResident();
     }
   });
-  wc.on("did-finish-load", () => injectOverlay(wc));
+  wc.on("did-start-navigation", (event, url, inPlace, mainFrame) => {
+    // 兼容新 details 对象和旧 Electron 位置参数；页内跳转和子 frame 不换文档。
+    const main = event && typeof event.isMainFrame === "boolean" ? event.isMainFrame : mainFrame;
+    const same = event && typeof event.isSameDocument === "boolean" ? event.isSameDocument : inPlace;
+    if (main && !same) revokeWindow(wc);
+  });
+  wc.on("did-finish-load", () => {
+    if (!isMainWindowState(wc)) { clearWindowState(wc.id); return; }
+    injectOverlay(wc);
+  });
   if (wc.isLoading()) return;
   injectOverlay(wc);
 };

@@ -40,7 +40,7 @@
 关键调用链：
 - 桌面入口以绝对 `file://` 动态 `import` 引入 `inject-main.cjs`；主桥调用 Python，监听数据库及 WAL 变化，按窗口推送快照给 `overlay.js`。
 - 渲染端通过宿主会话/工作区 IPC 与本项目 scope 上报维持窗口和分栏身份；查询请求为 `{sids, scopes: [{sid, workspaceIdentity}]}`，响应 `recent` 携带 `workspace_identity`。
-- 工作区/任务 IPC、活动 SID IPC 与配置/更新写操作的校验不同；不能概括全部桥接同等可信，写操作保留本地窗口验证和固定动作白名单。
+- 工作区/任务/活动 SID IPC 统一验证资源目录内本地页面、主 frame 与非导航中窗口；配置/更新写操作仍保留固定动作白名单。注入、读取、推送与异步返回均检查当前窗口来源；导航和销毁清理窗口映射。
 - MCP 与 CLI 使用查询库；插件 `.mcp.json` 直接启动包内 `usage_mcp.py`，不是统一 `run.py` 入口。
 - `hooks/session-start.py` 负责运行文件同步、更新/自动安装及提醒；`hooks/prompt-submit.py` 记录本会话提问时间并提供统计指令，速率查询使用包内 `token_rate.py`。
 - 专有入口是 `overlay_install.py`、`plugin_auto_update.py`、`restart_notice.py` 等；改变 hook 返回值应检查宿主 CLI 契约，不以手工执行代替自然事件验收。
@@ -73,11 +73,12 @@ python3 sync_plugin.py --check
 - 配置只合并需要的键，不整体覆盖 `config.json`；保留未知键、用户显式关闭与个人路径。插件配置事务在锁内重读、合并，再同目录原子替换；损坏或非对象配置不能被默默重建。
 - `config.example.json` 是模板，不可原样执行占位的 Python/SSH 路径。缺字段默认值、非布尔异常值与显式 `false` 不能混为一谈，各开关应读相应实现。
 - 自动安装：缺文件/缺字段默认开启，显式 `false` 保留；`ZUSAGE_PLUGIN_AUTO_INSTALL=1/0` 优先配置，但不能越过 `.plugin-overlay-optout`，无环境覆盖时异常配置不开启。
-- `plugin_auto_update` 与自动安装是独立开关；损坏或非布尔更新配置不能启动自动更新。
+- `plugin_auto_update` 与自动安装是独立开关；本地安全修复版缺配置/缺字段默认关闭更新，仅显式布尔 true 开启，损坏或非布尔配置不能启动更新；已有显式设置保留。
 - CLI 普通报表、JSON 快照、hook JSON、MCP stdio 各有输出契约：机器协议的 stdout 不夹日志、安装提示或调试文本；诊断走已有 stderr/诊断文件路径。
 - 常驻查询是一请求一行 JSON 的协议；MCP 是 JSON-RPC，不可混用两者消息形状。增字段需兼容生产者、消费者与测试夹具。
 - 维护要求：新增定时器、文件/IPC/DOM 监听器、子进程要有明确归属，验证热更新、导航、窗口关闭后的停用，不能声称当前已有完整全局 dispose。
 - 保留浮层代际守卫、幂等内容更新、tooltip 解绑/扫描清理；`rAF` 自调度必须异常后续帧，诊断对象原地更新，不替换闭包共享引用。
+- 桌面订阅回调传递已读取快照，避免二次深拷贝；健康检查至多每秒一次，计时刷新 250ms，消息扫描 1000ms，分栏协调与几何重查 1200ms。隐藏页面跳过视觉轮询/扫描，恢复可见时刷新，dispose 移除 visibilitychange 监听。Web 浮层独立维护。
 - 桌面浮层保持 body 级 fixed、样式挂在条内，不进入 React 布局流；几何避开输入框中心点命中检测，避免自遮挡闪烁。条宽跟随卡片并分级收缩，Web 布局另验。
 - 配置/更新/安装锁跨 Python 与 Node；OS advisory 锁文件永久保留，不通过删锁文件解锁。更新租约/所有者与旧锁恢复是另一层协议，保留各自规则，不把冲突当成功，也不删运行目录绕过并发或热修保护。
 - `.gitattributes` 固定 LF。发现 CRLF 或未提交改动时先保留数据，用干净的独立工作树验证；禁止用强制 reset/clean/重新检出解决问题而丢失用户修改。
@@ -101,8 +102,9 @@ python3 sync_plugin.py --check
 - 主标签页（`workspace-main`）及各分栏的归属只取本窗口实际 SessionPane 节点：`renderer_bridge.py` 按已登记版本、原始资产 SHA256 与唯一 JSX 锚点写入 React 管理的 `data-zusage-scope-version=1`、workspacePath、workspaceIdentity、remoteSessionId、paneId，与原 `data-session-id` 同节点同步更新。共享 last-session、pane-layout、workbench-groups 与 conversation registry 保活历史不构成当前归属证据。读取须校验协议、字段、SID、paneId 与节点存活；明确本地 identity 为空可查本地；无桥/读不到身份且本窗无任何远端证据（`remote_evidence === false`）时按本地记录显示；有远端证据或泵绑定为远端时 fail-closed，不借同 SID 本地快照或其它 pane 远端数据（issue #40）。身份不在本窗可信 workspace IPC 或与 tasks 矛盾时不放行远端；当前节点改变或撤销后迟到载荷丢弃。当前登记客户端为 3.15.3/3.16.1/3.16.2；表内版本资产哈希漂移仍拒绝，表外版本先走 derive_target 严格推导（唯一锚点、注册表/key/topic 绑定、store 形状与 import 目标），校验不过拒绝补丁并降级为 DB 轮询。旧 conversation-only 补丁须升级安装并完全重启，不启用共享记录回退。
 - 远端 scope 必须有可靠当前身份。明确绑定身份的分栏与上述当前节点主绑定可路由；归属未知或歧义时 fail-closed，不猜服务器。
 - 桌面 JSON 请求中的 `scopes: []` 禁止旧单通道 fallback。旧 CLI SID/逗号列表兼容行为不能扩大为桌面身份推断。
-- `remote.auto` 与 `remote.enabled` 独立；彻底关闭需两者为 false。手动目标通过 `identity`/`identities` 绑定并覆盖同身份自动目标，标签不作身份。
+- `remote.auto` 与 `remote.enabled` 独立；本地安全修复版两者缺省关闭，仅显式布尔 true 开启，缺失/非布尔值不启用。自动发现设置读取与查询泵的重试判断必须一致。手动目标通过 `identity`/`identities` 绑定并覆盖同身份自动目标，标签不作身份。
 - 各目标分别维护 today、错误、缓存与恢复；失败不借本地/其它目标总量，保留同身份最近成功快照并标记过期。null/error 不等于成功，也不应清空最近成功显示。
+- 桌面 `data_health` 标记 fresh/stale/unavailable 与成功时间；失败显示过期或不可用，不用零值冒充查询成功。本地库错误不影响健康远端分栏；成功缓存仅由新载荷更新，键包含 SID、当前节点 scope、绑定与远端目标，计时/几何重绘不能把旧载荷重新登记到新工作区。失败本地查询需定时重试，不依赖数据库新增写入。
 - 保留持续退避重试、超时/并发预算、配置与连接变化心跳；统计链恢复不等于插件替宿主重连 SSH。
 - 远端只需手工部署匹配的 `zusage.py`、Python 和数据库读取权限，通道必须免交互。不能解密复用宿主密码/私钥口令，不自动部署或登录；递归防护不可去除。
 - 远端支持限桌面 JSON 查询链；MCP、`/usage`、逐问速率不自动跨机，Web 单独部署。详情见 [远程会话](docs/user-guide.md#远程会话)。
@@ -113,6 +115,8 @@ python3 sync_plugin.py --check
 - 插件卸载浮层保留 `.plugin-overlay-optout` 阻止自动重注入和安装提醒，但不关闭运行文件同步/插件更新；仅卸载宿主插件也不保证旧主进程引用/浮层消失。
 - 自动安装/修复可能受权限、事件触发、宿主结构影响；成功后仍需重启。不替用户自行重启，不用强制提权掩盖失败；sudo 提示必须保留目标用户 HOME/PATH 和用户产物归属。
 - 配置、数据库、诊断、本地热修不是发布素材；可信同步保护用户改动，解包保留路径穿越、链接、重复项和文件集限制。
+- 诊断不转储 localStorage 值、URL 或工作区属性；主进程独立按固定 schema 投影，失败时不写原始输入。`diag-*.json` 以 POSIX 0600 原子替换，保留安装监控使用的更新时间；不公开会话 ID、路径、正文或异常原文。历史诊断不因源码修改而自动删除。
+- 数据库连接必须保持 `mode=ro` 与 `query_only=1`，路径使用编码后的 file URI；只读连接失败不得退回可写连接。
 - 本地统计只读数据库，不上传用量；远端查询使用配置/宿主连接通道，插件更新另行联网下载代码，不能笼统宣称整个插件“不联网”。
 - Web 默认 loopback sidecar 向本机 ZCode 校验设备 Cookie；保留 nginx 认证、静态白名单和 systemd 只读限制，不直接暴露公网。`readonly-guard.py` 不改写已含 `mode=rw` 的 URI，不能把包装器当无条件只读安全边界。
 
@@ -174,7 +178,7 @@ node --check web/zusage-sidecar.mjs
 - 配置键、默认值、协议、兼容性变更时更新 `config.example.json`、相关 README、[用户指南](docs/user-guide.md)、插件 README/命令/hooks/技能；设计或发布链变化同时检查维护/设计文档。
 - JSON 示例不得含注释，路径占位须说明替换；检查仓库相对链接、标题锚点及示例能否解析。
 - 当前文档有已知滞后：README 与用户指南的正式自动安装范围不同；README 命名空间命令说明与用户指南裸命令不同；设计笔记的“空闲零进程”、`current` 窗口及“最近一次速度”与常驻/回查实现不完全一致。
-- 安装命令文档的 `sudo python install.py` 不适用于仅含插件子树的缓存；Web 文档的 `node:sqlite` 理由和安全文档的全局“不联网”也不匹配当前实现。修改对应领域时结合源码/契约测试核对，不顺手改业务逻辑或宣称正式渠道已有 main 功能。
+- 安装命令文档的 `sudo python install.py` 不适用于仅含插件子树的缓存；Web 文档的 `node:sqlite` 理由仍不匹配当前实现。修改对应领域时结合源码/契约测试核对，不顺手改业务逻辑或宣称正式渠道已有 main 功能。
 
 ## 8. 发布与外部操作边界
 

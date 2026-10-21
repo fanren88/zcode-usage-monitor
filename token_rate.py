@@ -118,11 +118,15 @@ def write_session_state(session_id, source):
 
 def open_db():
     """只读连接；库不存在/损坏返回 None（连接 ro URI 失败不会新建空库）。"""
+    con = None
     try:
-        con = sqlite3.connect(f"file:{Path(DB_PATH).as_posix()}?mode=ro", uri=True, timeout=3)
+        con = sqlite3.connect(Path(DB_PATH).resolve().as_uri() + "?mode=ro", uri=True, timeout=3)
+        con.execute("pragma query_only=1")
         con.row_factory = sqlite3.Row
         return con
     except sqlite3.OperationalError:
+        if con is not None:
+            con.close()
         return None
 
 

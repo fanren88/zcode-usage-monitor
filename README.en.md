@@ -1,4 +1,18 @@
+> **ZCode Usage Monitor — hardened source branch:** `fanren88/zcode-usage-monitor` is based on [ByteRax/zcode-token-usage-statusbar](https://github.com/ByteRax/zcode-token-usage-statusbar), retaining the original attribution and MIT license. It includes privacy fixes, trusted-window checks, refresh optimizations and stale-data indicators; internal plugin identifiers remain compatible. This branch has no official Release yet. Upstream update channels referenced below do not contain these fixes. Install this branch from source:
+
+```bash
+git clone https://github.com/fanren88/zcode-usage-monitor.git
+cd zcode-usage-monitor
+python3 install.py
+```
+
+Quit ZCode completely and reopen it after installation. On Windows, use `python` if `python3` is unavailable.
+
 <div align="center">
+
+> **Local security hardening:** This checkout includes privacy fixes that have not been published upstream. Install from this local source; switching to a stable Release or updating may replace the fixes. Automatic updates and SSH discovery default off, while existing explicit opt-ins are preserved. Diagnostics retain only minimal status; see [.github/SECURITY.md](.github/SECURITY.md) (Chinese).
+
+> **Local desktop improvements:** Local-window and main-frame checks now cover the desktop bridge. Subscription snapshots are reused and hidden pages pause visual polling. Failed queries show stale/unavailable status and the last successful refresh time. These changes do not update an already installed client.
 
 # ZCode Token Speed Status Bar
 
@@ -222,7 +236,7 @@ They're three separate things, and missing any one of them makes it look like "I
 
 **How do I update it later?**
 
-- **Plugin (stable channel)**: type `/plugin marketplace update zusage-marketplace` in ZCode, then update the plugin under **Settings → Plugin → Installed**. Or just use ⚙ → **Check for updates / Update now** — automatic updates are on by default. If you registered the GitCode channel, this whole flow — version check through download and install — runs on GitCode, and the ⚙ source line names the channel in use.
+- **Plugin (stable channel)**: type `/plugin marketplace update zusage-marketplace` in ZCode, then update the plugin under **Settings → Plugin → Installed**. Or just use ⚙ → **Check for updates / Update now** — automatic updates are off by default in this locally hardened checkout and can be enabled in ⚙. If you registered the GitCode channel, this whole flow — version check through download and install — runs on GitCode, and the ⚙ source line names the channel in use.
 - **Local directory / source branch**: the updater in ⚙ only follows stable Releases. On a source install it reports that automatic updates aren't available — run `git pull` and reinstall, or [switch the marketplace to the stable channel](docs/user-guide.md#切换已有市场到正式渠道) (Chinese).
 - **One-command installer**: the ⚙ **Check for updates** only works for plugin installs. Updating is two steps — `git pull` inside the clone (it pulls from wherever you cloned from, so GitCode mirror users pull from GitCode), then rerun `python install.py`.
 - If an update won't go through, you can also send "更新zcode 插件 https://github.com/ByteRax/zcode-token-usage-statusbar" to ZCode and let it reinstall for you.
@@ -291,7 +305,7 @@ The boundaries around missing data, invalid samples and historical turns (no sta
 
 - **This is not an official ZCode feature.** It's a community plugin with no connection to the ZCode team, and it works by injecting into the client's `app.asar`.
 - **The local database is read-only.** Usage data is never uploaded.
-- **Plugin updates do use the network** — they download code from the source you've configured. Automatic updates are on by default; turn them off in ⚙.
+- **Plugin updates do use the network** — they download code from the source you've configured. Automatic updates are off by default in this locally hardened checkout; SSH discovery also requires explicit `remote.auto: true`.
 - **SSH remote queries also use the network** — they run a read-only query script on the remote host through the transport you configured. Prerequisites and limits are in [SSH remote sessions](#ssh-remote-sessions).
 - **Your credentials are never decrypted or reused.** Passwords, encrypted private keys and passphrases stored by ZCode are never decrypted by the plugin; set up an SSH key / agent yourself.
 - **Token usage is not billing.** There's no plan cost, no remaining quota and no billing information here.

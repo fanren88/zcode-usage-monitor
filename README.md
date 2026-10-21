@@ -1,4 +1,18 @@
+> **ZCode Usage Monitor 安全加固分支：** 本仓库为 `fanren88/zcode-usage-monitor`，基于 [ByteRax/zcode-token-usage-statusbar](https://github.com/ByteRax/zcode-token-usage-statusbar) 修改，保留原作者署名及 MIT 许可证。包含隐私修复、窗口来源校验、刷新优化和数据过期提示；插件内部名称保持兼容。此分支尚无正式 Release，下文保留的上游更新渠道不包含本分支修复。请用本仓库源码安装：
+
+```bash
+git clone https://github.com/fanren88/zcode-usage-monitor.git
+cd zcode-usage-monitor
+python3 install.py
+```
+
+安装后完全退出并重开 ZCode。Windows 可将 `python3` 换成 `python`。
+
 <div align="center">
+
+> **本地安全修复版：** 本检出包含尚未发布至上游正式渠道的隐私修复。请从本地源码安装；切换正式 Release 或更新可能覆盖修复。默认关闭自动更新与 SSH 自动发现，已有显式开启设置保留。诊断仅保留必要状态，详见 [.github/SECURITY.md](.github/SECURITY.md)。
+
+> **桌面本地优化：** 统一校验本地窗口与主 frame，复用订阅快照并暂停隐藏页面的视觉轮询；查询失败显示过期/不可用状态与最后成功时间。详见[使用指南](docs/user-guide.md#本地版的刷新与数据状态)。
 
 # ZCode Token 速度状态栏
 
@@ -222,7 +236,7 @@ macOS 上要是没有 `python`，就写 `python3 install.py`。
 
 **以后怎么更新？**
 
-- **插件（正式渠道）**：在 ZCode 里敲 `/plugin marketplace update zusage-marketplace`，再去 **设置 → 插件 → 已安装** 更新这个插件。或者直接点 ⚙ 里的「检查更新 / 立即更新」。自动更新默认是开的。注册的是 GitCode 渠道的话，这套更新从版本检查到下载安装全部走 GitCode，⚙ 的「更新来源」会写明当前渠道。
+- **插件（正式渠道）**：在 ZCode 里敲 `/plugin marketplace update zusage-marketplace`，再去 **设置 → 插件 → 已安装** 更新这个插件。或者直接点 ⚙ 里的「检查更新 / 立即更新」。本地安全修复版默认关闭自动更新，可在 ⚙ 中主动开启。注册的是 GitCode 渠道的话，这套更新从版本检查到下载安装全部走 GitCode，⚙ 的「更新来源」会写明当前渠道。
 - **本地目录 / 源码分支**：⚙ 里的自动更新只认正式 Release。源码安装点它会提示"不支持自动更新"，请先 `git pull` 再重新安装，或按[切换到正式渠道](docs/user-guide.md#切换已有市场到正式渠道)迁移。
 - **一键安装器**：⚙ 里的「检查更新」只对插件安装有效。一键安装的更新就两步：进克隆目录 `git pull`（从哪个地址克隆的就从哪里拉，GitCode 镜像用户拉的就是 GitCode），再重跑一次 `python install.py`。
 - 更新装不上时，也可以把「更新zcode 插件 https://github.com/ByteRax/zcode-token-usage-statusbar」这句话直接发给 ZCode，让它帮你重装。
@@ -291,7 +305,7 @@ macOS 上要是没有 `python`，就写 `python3 install.py`。
 
 - **这不是 ZCode 官方功能**，是社区做的插件，和官方团队没有关系。状态条的实现方式是往客户端 `app.asar` 里注入。
 - **本地数据库是只读的。** 用量数据不会上传。
-- **但插件更新要联网**——从你配置好的来源下载代码。自动更新默认开着，可以在 ⚙ 里关掉。
+- **但插件更新要联网**——从你配置好的来源下载代码。本地安全修复版默认关闭自动更新；SSH 自动发现也需显式配置 `remote.auto: true`。
 - **用 SSH 远端查询也会联网**——经由你配好的通道在远端跑只读查询脚本。前提和限制见 [SSH 远端会话](#ssh-远端会话)。
 - **不会解密复用你的凭据。** ZCode 里存的密码、加密私钥、口令都不会被插件拿去解密使用，SSH key / agent 请自己配好。
 - **token 用量不等于账单。** 这里没有套餐费用、没有剩余额度、没有计费信息。

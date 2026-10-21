@@ -17,7 +17,7 @@
  *       var(--ui-font-size, 14px) 按应用 text-ui 档位加减偏移（设置页「界面字号」
  *       运行时写 <html> 内联 --ui-font-size，改动实时联动），不再硬编码 px。
  * 数据：主进程泵推 window.__zusageUpdate；显示项可在 ⚙ 面板配置（localStorage 持久化）。
- * 分屏（v61.1）：协调器每 600ms 扫描可见输入框，按 pane（data-pane-id）派发实例——
+ * 分屏（v96）：协调器每 1200ms 扫描可见输入框，按 pane（data-pane-id）派发实例——
  *       一个 pane 一条，各自显示 composer 祖先链 data-session-id 指向的会话；
  *       各 pane 会话 id 汇总挂 window.__zusageWantSids 交泵强制拉取（旧泵忽略）。
  * 当前会话（v34）：泵按窗口注入 payload.mine（客户端渲染端经 IPC 向主进程上报的焦点会话 id，
@@ -40,6 +40,13 @@
   var disposed = false, coordinatorTimer = 0, bootTimer = 0;
   var MY_GEN = (window.__zusageGen = (window.__zusageGen || 0) + 1);
   function stale() { return disposed || MY_GEN !== window.__zusageGen; }
+  function pageHidden() { return document.hidden === true; }
+  function resumeVisuals() {
+    if (stale() || pageHidden()) return;
+    scanRateLines(); sharedTick();
+    instances.forEach(function (inst) { inst.refresh(); });
+  }
+  if (document.addEventListener) document.addEventListener("visibilitychange", resumeVisuals);
   if (window.__zusageRateCleanup) window.__zusageRateCleanup();
 
   var FATAL = (window.__zusageDiag = {});
@@ -153,7 +160,9 @@
     var target = found && found.remote_target || "";
     var key = JSON.stringify([sid, identity, target]);
     if (found && found.remote && !found.remote_error && !found.remote_missing) {
-      if (target) remoteCache[key] = found;
+      if (target && (!d.data_health || d.data_health.state === "fresh")) remoteCache[key] = Object.assign({}, found, {
+        remote_updated_at: d.data_health ? Number(d.data_health.updated_at) || 0 : Date.now(),
+      });
       return found;
     }
     // 只复用同目标的成功快照；identity 改指其它目标或目标未知时不能继承旧源数据。
@@ -170,7 +179,7 @@
     }
     state.data = d;
     for (var i = 0; i < instances.length; i++) {
-      try { instances[i].render(d); } catch (e) { FATAL.updateErr = String((e && e.stack) || e); }
+      try { instances[i].render(d, true); } catch (e) { FATAL.updateErr = String((e && e.stack) || e); }
     }
   };
   window.__zusagePluginRequests = [];
@@ -338,6 +347,7 @@
   function onRateEnter() { showRateTip(this); }
   function scanRateLines() {
     if (stale()) { cleanupRateTip(); return; }
+    if (pageHidden()) return;
     scanPluginNotices();
     rateBindings = rateBindings.filter(function (binding) {
       if (state.rateLine && isRateLine(binding.el)) return true;
@@ -370,8 +380,8 @@
     if (window.__zusageRateCleanup === cleanupRateTip) delete window.__zusageRateCleanup;
   }
   window.addEventListener("scroll", hideRateTip, true);   // 捕获：任意容器滚动即收
-  /* v88：扫描与心跳统一 0.5s（用户要求计时 0.5s 步进；富文本重试上限同步放大保持 ~12s 等库窗口） */
-  var rateScanTimer = setInterval(scanRateLines, 500);
+  /* v96：视觉扫描每秒一次；计时文字由独立的 250ms 刷新驱动。 */
+  var rateScanTimer = setInterval(scanRateLines, 1000);
   window.__zusageRateCleanup = cleanupRateTip;
   scanRateLines();
 
@@ -539,7 +549,7 @@
    * 一轮在同一 session 完成，交付结果可能被关联到新 tid 上而非发起时的旧 tid，这是
    * 一个已知的、极窄时间窗口内的小概率错位，权衡实现复杂度后不做进一步纠偏）。 */
   var richTextCache = {}, richTextAttempts = {}, richTextRequestTids = {};
-  var RICH_TEXT_MAX_ATTEMPTS = 24;   // 0.5s 一 tick × 24 ≈ 12s 窗口等数据库追上（v88 扫描提速后按时间等价放大），之后永久用简化文案兜底
+  var RICH_TEXT_MAX_ATTEMPTS = 12;   // 每秒一 tick，保留约 12s 等库窗口，之后用简化文案兜底
   function zuResetRichText() {
     richTextCache = {};
     richTextAttempts = {};
@@ -558,7 +568,7 @@
     else window.__zusagePluginRequests = [req];
     richTextAttempts[tid] = (richTextAttempts[tid] || 0) + 1;
   }
-  /* 主进程回推：非空 = 富文本到位，写缓存并立即重扫（不等下一个 0.5s tick）；空 = 库里还没
+  /* 主进程回推：非空 = 富文本到位，写缓存并立即重扫（隐藏时等恢复可见）；空 = 库里还没
    * 追到这一轮（或没有有效的提问时刻可推断），什么都不做——重试由 scanDeterministicLines
    * 的定时扫描自然驱动，这里绝不自建重试队列（否则两个驱动源叠加会绕开 attempts 上限）。 */
   window.__zusageDeliverTurnText = function (sid, text) {
@@ -612,7 +622,7 @@
     } catch (e) { FATAL.detErr = String((e && e.stack) || e); }
   }
   function scanDeterministicLines() {
-    if (stale()) return;
+    if (stale() || pageHidden()) return;
     try {
       if (!state.rateLine || !TURN_STATS) {   // 开关关闭：撤下自己插的行（模型历史行不动）
         document.querySelectorAll("[data-zusage-deterministic]").forEach(function (el) { el.remove(); });
@@ -752,15 +762,16 @@
    * 悬浮条合并 chip 在工具执行期仍显示同款动词+耗时（zuBarSpeedView），消息流内不再插节点。
    * 清理选择器保留（根清理 + dispose）：热更/重载后把旧版本可能残留的 span 清干净。 */
   function sharedTick() {
-    if (stale()) return;
+    if (stale() || pageHidden()) return;
     scanDeterministicLines();
   }
-  detTimer = setInterval(sharedTick, 500);   // v88：2s→0.5s，与速率行扫描/心跳同节奏
+  detTimer = setInterval(sharedTick, 1000);   // 可见时每秒扫描；订阅继续实时更新速率。
   sharedTick();
 
   function disposeOverlay() {
     if (disposed) return;
     disposed = true;
+    if (document.removeEventListener) document.removeEventListener("visibilitychange", resumeVisuals);
     clearTimeout(bootTimer);
     clearInterval(coordinatorTimer);
     instances.forEach(function (inst) { inst.dispose(); });
@@ -815,7 +826,7 @@
     }
     var SEL = 'textarea, [contenteditable="true"], [role="textbox"], .ProseMirror, .ql-editor';
     function tick() {
-      if (stale()) return;
+      if (stale() || pageHidden()) return;
       try {
         var best = {};
         document.querySelectorAll(SEL).forEach(function (el) {
@@ -845,13 +856,14 @@
       } catch (e) { FATAL.coordErr = String((e && e.stack) || e); }
     }
     tick();
-    coordinatorTimer = setInterval(tick, 600);
+    coordinatorTimer = setInterval(tick, 1200);
   }
 
   /* ---------- 实例工厂（v61.1）：一个 pane 一套 条/面板/气泡/tooltip/定位循环。
    * slot 0 保留 #zusage-bar/#zusage-tip 兼容 id（泵热更新按它清理），其余实例仅类名。 */
   function spawnInstance(pid, slot) {
-    var VERSION = "v94";   // v82 统计行锚点深度查找（新会话结构嵌套在 group/assistant-turn 内容列内）→ v83 万/亿单位开关（默认开、仅中文）+ K/M/B 的 B 档 → v84 主标签页远端路由（工作台分组唯一主绑定上报 + 迟到载荷守卫，issue #30）→ v85 回答末尾统计行跟随万/亿开关 + tok→token → v86 历史轮 tracker 无记录（窗口滑出/换代/热更）或缺输出字段不再翻成"本轮统计不可用"，加 det 诊断 → v87 主叶归属增 last-session 回退（组零证据时唯一远端记录放行，issue #30 复测：单会话主标签页不建组）→ v88 运行态心跳与两处扫描 tick 2s→0.5s（富文本重试 6→24 次等价放大）→ v89 ⚙ 面板更新进度：downloading 阶段文案 + 下载（字节）/安装（校验→安装→同步）双进度条，缺 progress 的旧主进程自动隐藏 → v90 主标签页/分栏归属改按本窗会话节点身份（renderer 桥按版本/资产/锚点写 SessionPane 属性，移除 workbench-groups/last-session 共享回退）+ 心跳 0.5s→0.1s（扫描维持 0.5s）→ v91 设置页/权限面板冒条修复（PR #44：inSettingsView 三处派发排除 + anchorCardOf 面板锚点改判）收编收尾：排除标记并集（settings-page testid + content/panel 双 frame）、track 显隐第四处防御 → v92 ⚙ 更新区固定显示可复制的重装口令（源码安装无法自动更新时引导用户发给 agent）→ v93 原生上下文按钮（chat-context-usage-trigger）增强：环填充/四档色/右侧百分比镜像状态条上下文格（ctxBandOf 同源），cw 缺失还原原生形态 → v94 状态条删除「上下文容量」格（UI+tooltip，该口径由原生按钮增强承载），⚙ 面板同步去掉「上下文」开关，子代理格改始终展示（零值也显示）   // 悬停 ⚙ 面板可见；版本号随代际递增
+    var VERSION = "v96"; // v96: trusted windows, subscription snapshots, explicit freshness
+    // v82 统计行锚点深度查找（新会话结构嵌套在 group/assistant-turn 内容列内）→ v83 万/亿单位开关（默认开、仅中文）+ K/M/B 的 B 档 → v84 主标签页远端路由（工作台分组唯一主绑定上报 + 迟到载荷守卫，issue #30）→ v85 回答末尾统计行跟随万/亿开关 + tok→token → v86 历史轮 tracker 无记录（窗口滑出/换代/热更）或缺输出字段不再翻成"本轮统计不可用"，加 det 诊断 → v87 主叶归属增 last-session 回退（组零证据时唯一远端记录放行，issue #30 复测：单会话主标签页不建组）→ v88 运行态心跳与两处扫描 tick 2s→0.5s（富文本重试 6→24 次等价放大）→ v89 ⚙ 面板更新进度：downloading 阶段文案 + 下载（字节）/安装（校验→安装→同步）双进度条，缺 progress 的旧主进程自动隐藏 → v90 主标签页/分栏归属改按本窗会话节点身份（renderer 桥按版本/资产/锚点写 SessionPane 属性，移除 workbench-groups/last-session 共享回退）+ 心跳 0.5s→0.1s（扫描维持 0.5s）→ v91 设置页/权限面板冒条修复（PR #44：inSettingsView 三处派发排除 + anchorCardOf 面板锚点改判）收编收尾：排除标记并集（settings-page testid + content/panel 双 frame）、track 显隐第四处防御 → v92 ⚙ 更新区固定显示可复制的重装口令（源码安装无法自动更新时引导用户发给 agent）→ v93 原生上下文按钮（chat-context-usage-trigger）增强：环填充/四档色/右侧百分比镜像状态条上下文格（ctxBandOf 同源），cw 缺失还原原生形态 → v94 状态条删除「上下文容量」格（UI+tooltip，该口径由原生按钮增强承载），⚙ 面板同步去掉「上下文」开关，子代理格改始终展示（零值也显示）   // 悬停 ⚙ 面板可见；版本号随代际递增
     var instanceDisposed = false, heavyTimer = 0, frame = 0, themeObserver = null;
     var globalListeners = [];
     function listenGlobal(target, type, fn, capture) {
@@ -873,6 +885,7 @@
       ctxBtnCache = null,   // v92：本实例上次增强的原生按钮（还原/对账引用，不依赖 cardCache 存活）
       liveTextCur = "", liveStatsCur = null, liveKindCur = "fallback", liveEl = null,   // v72：合并「生成速度」用
       livePhaseCur = "", liveIconCur = "bolt";   // v77：当前 chip 阶段与图标（think=思考动效/bolt=闪电）——相位切换需整条重渲染
+    var healthyView = null, healthyKey = "", healthyAt = 0;
 
     /* ---------- DOM ---------- */
     /* 样式表挂在 bar 内部而非 head：React 可能清理 head 里的外来 style，
@@ -901,6 +914,7 @@
       ".zusage-root.zu-in{position:static;background:none;border:0;border-radius:0;padding:1px 0 0;" +
       "box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;min-width:0;max-width:none;z-index:auto}" +
       ".zu-main{overflow:hidden;min-width:0;flex:1 1 auto;display:flex;align-items:center;gap:1px;justify-content:space-between}" +
+      ".zu-data-health{flex:0 0 auto;font-size:calc(var(--ui-font-size,14px) - 3px);color:var(--color-text-warning,#b87716);padding:0 4px}" +
       /* 收缩兜底（v66）：分级收缩后仍装不下时右缘 26px 渐隐，替代生硬的截断 */
       ".zu-main.zu-clip{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);" +
       "mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent)}" +
@@ -1144,7 +1158,9 @@
     if (slot === 0) bar.id = "zusage-bar";
     bar.style.display = "none";   // 定位成功前不显示（避免占位）
     bar.innerHTML = '<span class="zu-main">…</span>' +
+      '<span class="zu-data-health" role="status" aria-live="polite" style="display:none"></span>' +
       '<span class="btn zu-gear">⚙</span>';
+    var healthEl = bar.querySelector(".zu-data-health");
     var panel = document.createElement("div");
     panel.className = "panel zu-settings";
     function settingRow(input, title, note) {
@@ -1175,7 +1191,7 @@
       settingRow('<input type="checkbox" class="zu-rate-line">', L("回答末尾追加统计行", "Append stats to each reply"), L("默认开启，下一次提问生效。包含速率（含思考）、首字延迟、输出量、生成耗时、段数峰值与会话累计。", "On by default; effective on the next prompt. Includes speed (with thinking), first-token latency, output, duration, segments/peak and session total.")) +
       '</div></section>' +
       '<section class="zu-settings-section"><div class="cap">' + L("插件更新", "Plugin updates") + '</div><div class="zu-settings-card">' +
-      settingRow('<input type="checkbox" class="zu-auto-update">', L("自动更新", "Automatic updates"), L("每 24 小时检查并安装新版，默认开启", "Check and install every 24 hours; on by default")) +
+      settingRow('<input type="checkbox" class="zu-auto-update">', L("自动更新", "Automatic updates"), L("默认关闭；开启后每 24 小时检查并安装新版", "Off by default; enabling checks and installs every 24 hours")) +
       '<div class="zu-settings-detail"><div class="zu-update-actions"><button type="button" data-update="check">' + L("检查更新", "Check for updates") + '</button><button type="button" data-update="update">' + L("立即更新", "Update now") + '</button></div>' +
       '<div class="zu-update-fallback"><b>' + L("更新装不上？", "Update not working?") + '</b>' +
       L("把这句话发给 ZCode，让它帮你重装或更新：", "Send this to ZCode and let it reinstall or update for you:") +
@@ -1438,8 +1454,8 @@
               + (d.remote_error ? L("查询失败 ", "query failed: ") + d.remote_error
                  : L("远端库里也没有这个会话（核对远端 zusage.py 读的库/用户与远端 ZCode 实际写入的是否一致）",
                      "the remote database does not have it either (verify the database/user the remote zusage.py reads matches what the remote ZCode writes)"))
-            : L("若这是 SSH 远程会话：客户端连过的远端工作区会自动被发现并查询（v12 零配置）；没查到时核对远端机已部署 zusage.py，或在 config.json 配置 remote 段（README「远程会话」；ssh 也可写成 argv 数组，docker exec / wsl / kubectl exec 等通道都能借道）",
-                "If this is a remote SSH session: remote workspaces the client connected to are discovered and queried automatically (v12, zero config); if it's still missing, make sure zusage.py is deployed on the remote machine, or add the remote section to config.json (see README; ssh may also be an argv array, so docker exec / wsl / kubectl exec all work)")));
+            : L("若这是 SSH 远程会话：需在 config.json 显式开启 remote.auto 或配置 remote.enabled 后才会查询远端工作区；没查到时核对远端机已部署 zusage.py，或在 config.json 配置 remote 段（README「远程会话」；ssh 也可写成 argv 数组，docker exec / wsl / kubectl exec 等通道都能借道）",
+                "If this is a remote SSH session: remote queries require explicitly enabling remote.auto or configuring remote.enabled in config.json; if it's still missing, make sure zusage.py is deployed on the remote machine, or add the remote section to config.json (see README; ssh may also be an argv array, so docker exec / wsl / kubectl exec all work)")));
       }
       /* v73：生成速度——桥命中（本 pane 会话有 renderer 投影）时用它的估算/真实 tok/s，
        * 否则退回原 DB 最近一段值（与 state.rateLine 开关无关：桥不可用或开关关闭时
@@ -1660,7 +1676,7 @@
     }
 
     /* ---------- renderer store 桥客户端（v71，实例级）：一个 pane 一个订阅 ----------
-     * 低频（2s）能力检测：API 在 + diagnostics 里有本 pane 会话的 topic → 绑定 store；
+     * 绑定探测已由 zuTryBindStore 节流；API 与 diagnostics 匹配本 pane 会话 → 绑定 store；
      * 绑定后 tracker.ingest 由订阅推送驱动（实时），store 关闭/换代（getState null /
      * 快照 sessionId 变）→ off 释放，下轮 tick 重绑。全链路失败 = 降级 DB 路径。 */
     function bridgeDetach(handle) {
@@ -1671,17 +1687,22 @@
       if (bridge.handle === handle) { bridge.handle = null; bridge.turnId = ""; }
     }
     function bridgeTick() {
-      if (inactive()) return;
+      if (inactive() || pageHidden()) return;
       if (!state.rateLine || !TURN_STATS) { bridgeDetach(bridge.handle); updateLive(); return; }
       var sid = instSid || pickedSid || "";
       if (!sid) { bridgeDetach(bridge.handle); updateLive(); return; }
       if (bridge.handle) {
         if (bridge.handle.sid === sid) {
-          var cur = null;
-          try { cur = bridge.handle.store.getState(); } catch (e) { }
+          var cur = bridge.handle.cachedState;
+          var now = performance.now();
+          if (now - bridge.handle.checkedAt >= 1000) {
+            bridge.handle.checkedAt = now;
+            try { cur = bridge.handle.store.getState(); } catch (e) { cur = null; }
+            bridge.handle.cachedState = cur;
+          }
           var snap = cur && cur.snapshot;
           /* 绑定健康：store 可能在工具执行期间（查阅/编辑等）很久不推新快照——
-           * 仍按本轮 2s 心跳刷新一次，让「已观察 Xs」能继续走字，而不是整段
+           * 每 250ms 刷新计时文字，让「已观察 Xs」能继续走字，而不是整段
            * 工具执行时间里界面像冻住；updateLive 内部按文本/类名是否真变化
            * 做了去重写入，这里多调用一次不会造成多余的 DOM 抖动。 */
           if (snap && snap.sessionId === bridge.handle.sid) { updateLive(); return; }
@@ -1691,11 +1712,11 @@
       var store = zuTryBindStore(sid);
       if (!store) { updateLive(); return; }   // 无桥 / 无匹配 session：降级（DB 路径不变），下轮再探
       var tracker = TURN_STATS.createTracker();
-      var handle = { dead: false, sid: sid, store: store, tracker: tracker, alias: {}, off: null, charsPerToken: null, bornAt: Date.now() };
-      var off = TURN_STATS.subscribeStore(store, tracker, function () {
+      var handle = { dead: false, sid: sid, store: store, tracker: tracker, alias: {}, off: null, charsPerToken: null, bornAt: Date.now(), cachedState: null, checkedAt: performance.now() };
+      var off = TURN_STATS.subscribeStore(store, tracker, function (st) {
         if (inactive() || handle.dead) return;
-        var st = null;
-        try { st = store.getState(); } catch (e) { st = null; }
+        handle.cachedState = st;
+        handle.checkedAt = performance.now();
         var snap = st && st.snapshot;
         if (!snap || snap.sessionId !== sid) { bridgeDetach(handle); updateLive(); return; }   // 换代/关闭：下轮 tick 重绑
         var rows = snap.rows && snap.rows.window;
@@ -1720,6 +1741,7 @@
       updateLive();   // subscribeStore 首次同步回调已 ingest 初始快照，这里补挂实时段
     }
     function updateLive() {
+      if (pageHidden()) return;
       /* v73：合并「生成速度」chip 后，桥数据持续存在（生成中→完成，同一套
        * ico+'<span class="zu-live CLS">'+TEXT 结构）时只原地改 textContent/className，
        * 不重建条面（v33 原则）；桥「有/无」切换才会改变 chip 结构（图标出现/消失、
@@ -1731,7 +1753,7 @@
        * turnHeader 到位后自然切换为真实统计。 */
       if (!stats && h && !h.dead && bridge.handle && h.store) {
         try {
-          var st0 = h.store.getState();
+          var st0 = h.cachedState;
           var snap0 = st0 && st0.snapshot;
           if (snap0 && snap0.sessionId === h.sid) {
             var rows0 = snap0.rows && snap0.rows.window;
@@ -1766,12 +1788,11 @@
       liveTextCur = view ? view.text : "";
       render(state.data || { session: {}, last_turn: {}, today: {}, context_window: 0 });
     }
-    /* v90：心跳 0.5s→0.1s——0.5s 秒数走字仍有可感卡顿；render 有 lastHtml 幂等守卫，
-     * 内容未变时仅字符串构建+比较、不写 DOM，10Hz 空转无性能顾虑。扫描 tick 保持 0.5s。 */
-    bridge.timer = setInterval(bridgeTick, 100);
+    /* 订阅提供快照；250ms 只更新计时文字，深拷贝健康检查至多每秒一次。 */
+    bridge.timer = setInterval(bridgeTick, 250);
     bridgeTick();
 
-    function render(d) {
+    function render(d, delivery) {
       state.data = d;
       var pc = null, p = null;
       if (instSid) {
@@ -1800,6 +1821,19 @@
           if (!p) p = stubFor((pc && pc.want) || "");
         }
       }
+      var scopeNow = readPaneScope(wantedEl, pickedSid, pid);
+      var key = JSON.stringify([pickedSid, scopeNow, d.scope_bindings && d.scope_bindings[pid] || "", d.remote_evidence !== false,
+        p.workspace_identity || "", !!p.remote, p.remote_target || ""]);
+      var health = d.data_health || { state: "fresh", updated_at: Date.now() };
+      var localFailed = !p.remote && !!d.local_error;
+      var remoteFailed = !!p.remote && !!(p.remote_error || p.remote_missing || (d.remote_errors && d.remote_errors[p.remote_target]));
+      var failed = health.state !== "fresh" || localFailed || remoteFailed;
+      var saved = failed && healthyKey === key ? healthyView : null;
+      var present = (d.recent || []).indexOf(p) >= 0 || p.remote_stale;
+      var retained = p.remote_stale || health.state === "stale" && !remoteFailed;
+      var status = failed ? (saved || (!localFailed && retained && present && health.updated_at > 0) ? "stale" : "unavailable") : "fresh";
+      var updatedAt = saved ? healthyAt : localFailed ? 0 : p.remote_stale ? Number(p.remote_updated_at) || 0 : Number(health.updated_at) || 0;
+      if (saved) p = Object.assign({}, saved.session, p.remote ? { remote_stale: true, remote_error: p.remote_error || "query failed" } : {});
       excOn = excActive(p);   // 气泡的显示依据（track 每帧消费）
       lastBand = ctxBandOf(p);   // v92：原生上下文按钮增强的数据源（与状态条上下文格同口径）
       /* v12 多服务器：remote_today/remote_errors 按目标键分组，取本会话所属主机的分片；
@@ -1813,22 +1847,30 @@
       var view = {
         session: p, last_turn: p.last_turn || {}, last: p.last || {},
         /* v9：远端会话的「今日合计」用远端机数据，本地 today 只在显示本地会话时使用 */
-        today: p.remote ? (remoteToday || {}) : d.today,
+        today: saved ? saved.today : p.remote ? (remoteToday || {}) : d.today,
         native_ctx: nativeCtxVal,
         context_window: p.context_window, context_auto: p.context_auto,
         code: p.code, ctx_exc: p.ctx_exc, tools: p.tools,
         remote: !!p.remote, remote_host: p.remote_host || "", remote_error: p.remote_error || (d.remote_errors && myTarget && d.remote_errors[myTarget]) || (!d.remote_errors && d.remote_error) || "",
         /* v62（issue #14 / #10）：该会话不在本地库且没命中远端 → 条面给一次配置指引，
          * 把"各项全 0 = 插件坏了"的误判转成可执行的下一步；远端命中的会话由 ☁ 徽标那套说明。 */
-        not_local: (d.not_local || []).indexOf(p.sid) >= 0 && !p.remote,
+        not_local: !localFailed && (d.not_local || []).indexOf(p.sid) >= 0 && !p.remote,
         remote_enabled: !!d.remote_enabled,
         remote_stale: !!p.remote_stale,
         remote_empty: !!(p.remote && !p.requests && !p.remote_missing),
         sub: p.sub || {requests: 0, total: 0, input: 0, output: 0, cache_read: 0, active: false, list: []},
       };
+      // 几何/计时重绘不能把旧 payload 重新登记为另一工作区的成功数据。
+      if (delivery && !failed && present) { healthyView = view; healthyKey = key; healthyAt = Number(health.updated_at) || Date.now(); }
       lastSub = view.sub;   // 子代理明细面板的数据源（开关面板/数据推送刷新用）
       refreshWants();
+      if (pageHidden()) return;
+      healthEl.style.display = status === "fresh" ? "none" : "";
+      healthEl.textContent = status === "stale" ? L("数据已过期", "Data stale") : localFailed ? L("数据库不可用", "Database unavailable") : L("数据不可用", "Data unavailable");
+      healthEl.title = (localFailed ? L("本地数据库查询失败。", "Local database query failed. ") : L("统计查询暂不可用。", "Usage query is temporarily unavailable. ")) +
+        (updatedAt ? L("最后成功刷新：", "Last successful refresh: ") + new Date(updatedAt).toLocaleString() : L("尚无成功数据", "No successful reading yet"));
       var h = html(view);
+      if (status === "unavailable") h = { s: '<span class="dim">' + L("等待可用数据", "Waiting for available data") + '</span>', tips: [] };
       /* 内容没变就不重建 DOM：泵每 1.5s 推送一次，无条件 innerHTML 会重建条面+重启呼吸灯
        * 动画+触发 tooltip 重画 = 悬停时周期性闪烁（v33 修复）。变化时才重建。 */
       if (h.s !== lastHtml) {
@@ -2451,7 +2493,6 @@
       var d = window.__zusageDiag;
       d.time = new Date().toISOString();
       d.version = VERSION;
-      d.href = String(location.href).slice(0, 90);
       var shallow = {};
       COMPOSER_SEL.split(",").forEach(function (sel) {
         try { shallow[sel.trim()] = document.querySelectorAll(sel).length; } catch (e) { }
@@ -2561,7 +2602,7 @@
      * 按钮（chat-context-usage-trigger）与本条同 pane 同会话：数据取本实例 lastBand。
      * 稳定性依据：React 不清理非 props 的手动 data-* 属性，也不动 wrapper 末尾追加的
      * 节点（其 React children 只有 button）；dasharray/dashoffset 属 React 管理，宿主
-     * 数据更新瞬间会重写，由 render + heavy 双 reapply 兜回（≤600ms）。
+     * 数据更新瞬间会重写，由 render + heavy 双 reapply 兜回（可见时 ≤1200ms）。
      * cw 缺失时还原原生形态（按钮仍承载 Coding Plan/Start Plan 面板，不动其存在性）。 */
     var ZU_CTX_TRIGGER = '[data-testid="chat-context-usage-trigger"]';
     var ZU_CTX_CIRC = 62.83185307179586;   // 原生环 r=10 的周长（还原原生 dashoffset 用）
@@ -2699,7 +2740,7 @@
       if (bar.classList.contains("zu-in")) mountBelowCard();   // 换卡先回落兜底形态，heavy 同 tick 重判挂载
     }
     function heavy() {
-      if (inactive()) return;
+      if (inactive() || pageHidden()) return;
       if (pid === "auto") {
         /* 兜底模式（主文档找不到带 pane 标记的输入框，shadow/iframe 场景）：沿用原
          * 单条查找链路（findComposer 含 deepFind 穿透），会话判定走 mine/pickCurrent */
@@ -2838,50 +2879,21 @@
         bodyKids: kids,
       };
     }
-    /* 分屏现场诊断（v61）：转储全部可见 textarea 的祖先链（含 data-* 属性）、全页
-     * iframe 的矩形与 src、pane/layout 相关 localStorage 键——用于确认"pane → 工作区/
-     * 会话"能否从 DOM 映射（多实例状态条的数据源设计依据）。随 mount 诊断每 5s 刷新。 */
+    /* 诊断只计数；不读 storage、工作区/SID 属性或 iframe URL。 */
     function diagPanes() {
       try {
-        var composers = [];
-        document.querySelectorAll(COMPOSER_SEL + ",textarea").forEach(function (ta) {
-          if (!visible(ta)) return;
-          var r = ta.getBoundingClientRect();
-          if (r.top < innerHeight * 0.4) return;
-          var sess = null, pane = null, tag = elDesc(ta);
-          for (var p = ta; p && p !== document.body; p = p.parentElement) {
-            if (sess === null && p.hasAttribute && p.hasAttribute("data-session-id")) sess = p.getAttribute("data-session-id");
-            if (pane === null && p.hasAttribute && p.hasAttribute("data-pane-id")) pane = p.getAttribute("data-pane-id");
-          }
-          composers.push({ tag: tag, rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], pane: pane, sess: sess });
-        });
-        var webviews = [];
-        document.querySelectorAll("webview,iframe").forEach(function (fr) {
-          var r = fr.getBoundingClientRect();
-          webviews.push({ tag: fr.tagName, rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], src: String(fr.src || "").slice(0, 130) });
-        });
-        var attrHits = [];
-        document.querySelectorAll("[data-session],[data-session-id],[data-workspace],[data-workspace-path],[data-pane],[data-pane-id],[data-task-id]").forEach(function (el) {
-          var parts = [el.tagName];
-          for (var i = 0; i < el.attributes.length; i++) {
-            var a = el.attributes[i];
-            if (/^data-(session|workspace|pane|task)/i.test(a.name)) parts.push(a.name + "=" + String(a.value).slice(0, 60));
-          }
-          attrHits.push(parts.join(" "));
-        });
-        var lsPane = [];
-        try {
-          Object.keys(localStorage).forEach(function (k) {
-            if (/pane|split|layout|last-session/i.test(k)) lsPane.push(k + " = " + String(localStorage.getItem(k)).slice(0, 160));
-          });
-        } catch (e) { }
-        FATAL.panes = { time: new Date().toISOString(), composers: composers, webviews: webviews.slice(0, 10), attrHits: attrHits.slice(0, 30), lsPane: lsPane.slice(0, 20) };
-      } catch (e) { FATAL.panes = { err: String((e && e.stack) || e) }; }
+        FATAL.panes = {
+          composerCount: document.querySelectorAll(COMPOSER_SEL + ",textarea").length,
+          frameCount: document.querySelectorAll("webview,iframe").length,
+          scopedNodeCount: document.querySelectorAll("[data-session-id],[data-pane-id]").length,
+        };
+      } catch (e) { FATAL.panes = { unavailable: true }; }
     }
 
     function track() {
       if (inactive()) return;   // 旧实例罢工，把舞台让给新实例
       try {
+        if (pageHidden()) return;
         syncExcBubble();   // 超限气泡：显示/隐藏/贴条定位（内部自判状态，隐藏分支零开销）
         if (!composer || !composer.isConnected) { hideSince = 0; hideBar(); return; }
         if (cardMode) {
@@ -2974,30 +2986,6 @@
             nativeCtx: nativeCtxVal,
             picked: pickedSid,
             exc: excOn ? (excGone ? "on-gone" : "on") : 0,
-            href: String(location.href).slice(0, 120),
-            lsVals: (function () {
-              try {
-                var out = [];
-                Object.keys(localStorage).forEach(function (k) {
-                  out.push(k + " = " + String(localStorage.getItem(k)).slice(0, 90));
-                });
-                var wk = [];
-                Object.keys(window).forEach(function (k) {
-                  if (/zcode|session|store|state|tab/i.test(k)) wk.push(k);
-                });
-                out.push("WINDOW_KEYS=" + wk.join("|").slice(0, 300));
-                return out.join("\n").slice(0, 7000) || "(none)";
-              } catch (e) { return "ERR:" + e; }
-            })(),
-            lastSessionVals: (function () {
-              try {
-                var out = [];
-                Object.keys(localStorage).forEach(function (k) {
-                  if (/last-session/i.test(k)) out.push(k.slice(22) + "=" + String(localStorage.getItem(k)).slice(0, 50));
-                });
-                return out.join(" | ").slice(0, 1000) || "(none)";
-              } catch (e) { return "ERR:" + e; }
-            })(),
           };
         }
       } catch (e) {
@@ -3010,7 +2998,7 @@
       }
     }
 
-    heavyTimer = setInterval(heavy, 600);
+    heavyTimer = setInterval(heavy, 1200);
     heavy();
     frame = requestAnimationFrame(track);
 
@@ -3050,6 +3038,7 @@
         heavy();   // 立即对账（composer 重建/pane 关闭的最快收敛路径）
       },
       render: render,
+      refresh: function () { heavy(); if (state.data) render(state.data); bridgeTick(); },
       syncUpdate: syncUpdate,
       rebuild: function () { buildPanel(); rebuildExcBubble(); syncPanel(); },
       getSid: function () { return pickedSid || ""; },
@@ -3070,7 +3059,7 @@
         var h = bridge.handle, info = { bound: !!(h && !h.dead), sid: h ? String(h.sid).slice(-8) : "", rebinds: bridge.rebinds || 0 };
         if (!info.bound) return info;
         var snap = null;
-        try { var st = h.store.getState(); snap = st && st.snapshot; } catch (e) { info.err = String(e); }
+        try { var st = h.cachedState; snap = st && st.snapshot; } catch (e) { info.err = String(e); }
         if (snap) {
           info.win = snap.rows && Array.isArray(snap.rows.window) ? snap.rows.window.length : null;
           info.seq = snap.seq;

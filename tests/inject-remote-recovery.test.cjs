@@ -11,7 +11,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 function loadPump(config = {}, desktopHome = "/fixture/home") {
   let now = 100000, id = 0, cfgStamp = 1, settingStamp = 1;
   const timers = new Map(), intervals = [], procs = [], lines = [], windows = [], ipc = new EventEmitter();
-  let cfg = { activity_min_ms: 300, remote: { poll_ms: 1000 }, ...config };
+  let cfg = { activity_min_ms: 300, remote: { auto: true, poll_ms: 1000 }, ...config };
   class Clock extends Date { static now() { return now; } }
   const mockFs = {
     readFileSync: file => String(file).endsWith("config.json") ? JSON.stringify(cfg) : "{}",
@@ -58,12 +58,13 @@ function loadPump(config = {}, desktopHome = "/fixture/home") {
         return "null";
       },
     };
+    wc.mainFrame = { url: wc.getURL() };
     windows.push(wc); return wc;
   }
   return {
     api: sandbox.module.exports.__zusageTest, lines, procs, windows, timers, intervals, addWindow,
-    workspace(wc, identities) { ipc.emit("zcode:sync-web-remote-control-workspaces", { sender: wc }, identities.map(workspaceIdentity => ({ workspacePath: "/p", kind: "remote", workspaceIdentity }))); },
-    tasks(wc, identities) { ipc.emit("zcode:sync-web-remote-control-tasks", { sender: wc }, identities.map(workspaceIdentity => ({ taskId: "sA", workspaceKind: "remote", workspaceIdentity }))); },
+    workspace(wc, identities) { ipc.emit("zcode:sync-web-remote-control-workspaces", { sender: wc, senderFrame: wc.mainFrame }, identities.map(workspaceIdentity => ({ workspacePath: "/p", kind: "remote", workspaceIdentity }))); },
+    tasks(wc, identities) { ipc.emit("zcode:sync-web-remote-control-tasks", { sender: wc, senderFrame: wc.mainFrame }, identities.map(workspaceIdentity => ({ taskId: "sA", workspaceKind: "remote", workspaceIdentity }))); },
     respond(payload, p = procs.at(-1)) { p.stdout.emit("data", Buffer.from(JSON.stringify(payload) + "\n")); },
     setCfg(value) { cfg = { ...cfg, ...value }; cfgStamp++; },
     settingChanged() { settingStamp++; },
@@ -131,6 +132,18 @@ function renderer(wc, panes, bindings = {}, history = [A], workbench = null, sha
 const wbRemote = (identity = A, sessionId = "sA") => ({ workspaceScope: { workspacePath: "/p", workspaceIdentity: identity }, sessionId });
 const wbLocal = (sessionId = "sA") => ({ workspaceScope: { workspacePath: "/local" }, sessionId });
 const success = identity => ({ recent: [{ sid: "sA", workspace_identity: identity, remote: true, remote_target: "stable", requests: 3 }], not_local: ["sA"], remote_enabled: true });
+test("missing or invalid remote opt-in does not retain remote retry state", async () => {
+  for (const remote of [{}, { enabled: false }, { auto: "true" }, { auto: 1 }, { enabled: "true" }]) {
+    const f = loadPump({ remote });
+    await start(f); f.respond(success(A));
+    assert.equal(f.api.remoteSids.size, 0);
+    assert.equal(f.api.pendingSids.size, 0);
+    const count = f.lines.length;
+    await f.advance(3000);
+    assert.equal(f.lines.length, count);
+  }
+});
+
 for (const [label, payload] of [["success", success(A)], ["SSH failure", { recent: [{ sid: "sA", workspace_identity: A, remote: true, remote_error: "ssh failed", remote_missing: true }], not_local: ["sA"], remote_enabled: true }], ["error", { error: "database locked" }], ["null", null]]) {
   test(`first ${label} automatically retries with a real scheduled timer`, async () => {
     const f = loadPump(); await start(f); f.respond(payload);
@@ -399,7 +412,8 @@ for (const [label, payload] of [["error", { error: "locked" }], ["null", null], 
     assert.equal(f.api.remoteSids.size, 0); assert.equal(f.api.pendingSids.size, 0);
     await f.advance(31000); const count = f.lines.length;
     f.api.maybeSpawn(); await flush();
-    if (f.lines.length > count) f.respond(payload); // one config-change probe is allowed
+    // The failed query may continue local recovery; a healthy local response stops it.
+    f.respond({ recent: [], not_local: ["sA"], remote_enabled: false });
     const afterProbe = f.lines.length;
     await f.advance(31000); f.api.maybeSpawn(); await flush();
     assert.equal(f.lines.length, afterProbe);
@@ -428,7 +442,7 @@ test("complete remote shutdown stops polling but re-enable is detected", async (
 });
 test("external window IPC is not a trusted auto route", async () => {
   const f = loadPump(), wc = f.addWindow(A); wc.getURL = () => "https://example.invalid";
-  f.workspace(wc, [A]); f.api.maybeSpawn(); await flush(); assert.equal(f.lines[0].scopes.length, 0);
+  f.workspace(wc, [A]); f.api.maybeSpawn(); await flush(); assert.equal(f.lines.length, 0);
 });
 test("one-shot uses JSON protocol and retries after error/close once", async () => {
   const f = loadPump({ resident: false }); await start(f);

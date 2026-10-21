@@ -872,7 +872,8 @@
   /* ---------- 实例工厂（v61.1）：一个 pane 一套 条/面板/气泡/tooltip/定位循环。
    * slot 0 保留 #zusage-bar/#zusage-tip 兼容 id（泵热更新按它清理），其余实例仅类名。 */
   function spawnInstance(pid, slot) {
-    var VERSION = "v87";   // v82 统计行锚点深度查找（新会话结构嵌套在 group/assistant-turn 内容列内）→ v83 万/亿单位开关（默认开、仅中文）+ K/M/B 的 B 档 → v84 主标签页远端路由（工作台分组唯一主绑定上报 + 迟到载荷守卫，issue #30）→ v85 回答末尾统计行跟随万/亿开关 + tok→token → v86 历史轮 tracker 无记录（窗口滑出/换代/热更）或缺输出字段不再翻成"本轮统计不可用"，加 det 诊断 → v87 设置页排除：协调器/findComposer/deepFind/track 按 [data-testid="settings-page"] 祖先排除设置表单编辑框（MCP「请求头」textarea 被当聊天输入框、条挂进表单卡片）   // 悬停 ⚙ 面板可见；本会话热修部署未走提交，版本号随部署代际递增
+    var VERSION = "v88"; // v88: private diagnostics and opt-in background network access
+    // v82 统计行锚点深度查找（新会话结构嵌套在 group/assistant-turn 内容列内）→ v83 万/亿单位开关（默认开、仅中文）+ K/M/B 的 B 档 → v84 主标签页远端路由（工作台分组唯一主绑定上报 + 迟到载荷守卫，issue #30）→ v85 回答末尾统计行跟随万/亿开关 + tok→token → v86 历史轮 tracker 无记录（窗口滑出/换代/热更）或缺输出字段不再翻成"本轮统计不可用"，加 det 诊断 → v87 设置页排除：协调器/findComposer/deepFind/track 按 [data-testid="settings-page"] 祖先排除设置表单编辑框（MCP「请求头」textarea 被当聊天输入框、条挂进表单卡片）   // 悬停 ⚙ 面板可见；本会话热修部署未走提交，版本号随部署代际递增
     var instanceDisposed = false, heavyTimer = 0, frame = 0, themeObserver = null;
     var globalListeners = [];
     function listenGlobal(target, type, fn, capture) {
@@ -1154,7 +1155,7 @@
       settingRow('<input type="checkbox" class="zu-rate-line">', L("回答末尾追加统计行", "Append stats to each reply"), L("默认开启，下一次提问生效。包含速率（含思考）、首字延迟、输出量、生成耗时、段数峰值与会话累计。", "On by default; effective on the next prompt. Includes speed (with thinking), first-token latency, output, duration, segments/peak and session total.")) +
       '</div></section>' +
       '<section class="zu-settings-section"><div class="cap">' + L("插件更新", "Plugin updates") + '</div><div class="zu-settings-card">' +
-      settingRow('<input type="checkbox" class="zu-auto-update">', L("自动更新", "Automatic updates"), L("每 24 小时检查并安装新版，默认开启", "Check and install every 24 hours; on by default")) +
+      settingRow('<input type="checkbox" class="zu-auto-update">', L("自动更新", "Automatic updates"), L("默认关闭；开启后每 24 小时检查并安装新版", "Off by default; enabling checks and installs every 24 hours")) +
       '<div class="zu-settings-detail"><div class="zu-update-actions"><button type="button" data-update="check">' + L("检查更新", "Check for updates") + '</button><button type="button" data-update="update">' + L("立即更新", "Update now") + '</button></div>' +
       '<div class="pnote zu-update-status" role="status" aria-live="polite"></div>' +
       '<div class="pnote">' + L("仅更新此插件。GitHub 来源会联网，本地目录来源只检查本地文件，不上传用量数据。", "Only this plugin is updated. GitHub sources use the network; directory sources check local files. Usage data is never uploaded.") + '</div></div></div></section>' +
@@ -1391,8 +1392,8 @@
               + (d.remote_error ? L("查询失败 ", "query failed: ") + d.remote_error
                  : L("远端库里也没有这个会话（核对远端 zusage.py 读的库/用户与远端 ZCode 实际写入的是否一致）",
                      "the remote database does not have it either (verify the database/user the remote zusage.py reads matches what the remote ZCode writes)"))
-            : L("若这是 SSH 远程会话：客户端连过的远端工作区会自动被发现并查询（v12 零配置）；没查到时核对远端机已部署 zusage.py，或在 config.json 配置 remote 段（README「远程会话」；ssh 也可写成 argv 数组，docker exec / wsl / kubectl exec 等通道都能借道）",
-                "If this is a remote SSH session: remote workspaces the client connected to are discovered and queried automatically (v12, zero config); if it's still missing, make sure zusage.py is deployed on the remote machine, or add the remote section to config.json (see README; ssh may also be an argv array, so docker exec / wsl / kubectl exec all work)")));
+            : L("若这是 SSH 远程会话：需在 config.json 显式开启 remote.auto 或配置 remote.enabled 后才会查询远端工作区；没查到时核对远端机已部署 zusage.py，或在 config.json 配置 remote 段（README「远程会话」；ssh 也可写成 argv 数组，docker exec / wsl / kubectl exec 等通道都能借道）",
+                "If this is a remote SSH session: remote queries require explicitly enabling remote.auto or configuring remote.enabled in config.json; if it's still missing, make sure zusage.py is deployed on the remote machine, or add the remote section to config.json (see README; ssh may also be an argv array, so docker exec / wsl / kubectl exec all work)")));
       }
       /* v73：生成速度——桥命中（本 pane 会话有 renderer 投影）时用它的估算/真实 tok/s，
        * 否则退回原 DB 最近一段值（与 state.rateLine 开关无关：桥不可用或开关关闭时
@@ -2335,7 +2336,6 @@
       var d = window.__zusageDiag;
       d.time = new Date().toISOString();
       d.version = VERSION;
-      d.href = String(location.href).slice(0, 90);
       var shallow = {};
       COMPOSER_SEL.split(",").forEach(function (sel) {
         try { shallow[sel.trim()] = document.querySelectorAll(sel).length; } catch (e) { }
@@ -2605,45 +2605,15 @@
         bodyKids: kids,
       };
     }
-    /* 分屏现场诊断（v61）：转储全部可见 textarea 的祖先链（含 data-* 属性）、全页
-     * iframe 的矩形与 src、pane/layout 相关 localStorage 键——用于确认"pane → 工作区/
-     * 会话"能否从 DOM 映射（多实例状态条的数据源设计依据）。随 mount 诊断每 5s 刷新。 */
+    /* 诊断只计数；不读 storage、工作区/SID 属性或 iframe URL。 */
     function diagPanes() {
       try {
-        var composers = [];
-        document.querySelectorAll(COMPOSER_SEL + ",textarea").forEach(function (ta) {
-          if (!visible(ta)) return;
-          var r = ta.getBoundingClientRect();
-          if (r.top < innerHeight * 0.4) return;
-          var sess = null, pane = null, tag = elDesc(ta);
-          for (var p = ta; p && p !== document.body; p = p.parentElement) {
-            if (sess === null && p.hasAttribute && p.hasAttribute("data-session-id")) sess = p.getAttribute("data-session-id");
-            if (pane === null && p.hasAttribute && p.hasAttribute("data-pane-id")) pane = p.getAttribute("data-pane-id");
-          }
-          composers.push({ tag: tag, rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], pane: pane, sess: sess });
-        });
-        var webviews = [];
-        document.querySelectorAll("webview,iframe").forEach(function (fr) {
-          var r = fr.getBoundingClientRect();
-          webviews.push({ tag: fr.tagName, rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], src: String(fr.src || "").slice(0, 130) });
-        });
-        var attrHits = [];
-        document.querySelectorAll("[data-session],[data-session-id],[data-workspace],[data-workspace-path],[data-pane],[data-pane-id],[data-task-id]").forEach(function (el) {
-          var parts = [el.tagName];
-          for (var i = 0; i < el.attributes.length; i++) {
-            var a = el.attributes[i];
-            if (/^data-(session|workspace|pane|task)/i.test(a.name)) parts.push(a.name + "=" + String(a.value).slice(0, 60));
-          }
-          attrHits.push(parts.join(" "));
-        });
-        var lsPane = [];
-        try {
-          Object.keys(localStorage).forEach(function (k) {
-            if (/pane|split|layout|last-session/i.test(k)) lsPane.push(k + " = " + String(localStorage.getItem(k)).slice(0, 160));
-          });
-        } catch (e) { }
-        FATAL.panes = { time: new Date().toISOString(), composers: composers, webviews: webviews.slice(0, 10), attrHits: attrHits.slice(0, 30), lsPane: lsPane.slice(0, 20) };
-      } catch (e) { FATAL.panes = { err: String((e && e.stack) || e) }; }
+        FATAL.panes = {
+          composerCount: document.querySelectorAll(COMPOSER_SEL + ",textarea").length,
+          frameCount: document.querySelectorAll("webview,iframe").length,
+          scopedNodeCount: document.querySelectorAll("[data-session-id],[data-pane-id]").length,
+        };
+      } catch (e) { FATAL.panes = { unavailable: true }; }
     }
 
     function track() {
@@ -2741,30 +2711,6 @@
             nativeCtx: nativeCtxVal,
             picked: pickedSid,
             exc: excOn ? (excGone ? "on-gone" : "on") : 0,
-            href: String(location.href).slice(0, 120),
-            lsVals: (function () {
-              try {
-                var out = [];
-                Object.keys(localStorage).forEach(function (k) {
-                  out.push(k + " = " + String(localStorage.getItem(k)).slice(0, 90));
-                });
-                var wk = [];
-                Object.keys(window).forEach(function (k) {
-                  if (/zcode|session|store|state|tab/i.test(k)) wk.push(k);
-                });
-                out.push("WINDOW_KEYS=" + wk.join("|").slice(0, 300));
-                return out.join("\n").slice(0, 7000) || "(none)";
-              } catch (e) { return "ERR:" + e; }
-            })(),
-            lastSessionVals: (function () {
-              try {
-                var out = [];
-                Object.keys(localStorage).forEach(function (k) {
-                  if (/last-session/i.test(k)) out.push(k.slice(22) + "=" + String(localStorage.getItem(k)).slice(0, 50));
-                });
-                return out.join(" | ").slice(0, 1000) || "(none)";
-              } catch (e) { return "ERR:" + e; }
-            })(),
           };
         }
       } catch (e) {

@@ -14,7 +14,8 @@ function fixture(t, settings = {}) {
   fs.mkdirSync(runtime); fs.mkdirSync(inventory, { recursive: true });
   const recordFile = path.join(inventory, "installed_plugins.json");
   const configFile = path.join(runtime, "config.json");
-  fs.writeFileSync(configFile, JSON.stringify({ python_path: "python3", lang: "en", remote: { enabled: false }, ...settings }));
+  // Automatic-workflow fixtures opt in explicitly; default behavior is tested below.
+  fs.writeFileSync(configFile, JSON.stringify({ python_path: "python3", lang: "en", remote: { enabled: false }, plugin_auto_update: true, ...settings }));
   const record = { id: PLUGIN_ID, version: "1.0.0", scope: "user", installPath: path.join(dir, "installed") };
   const writeRecord = () => fs.writeFileSync(recordFile, JSON.stringify({ version: 1, plugins: [record] }));
   writeRecord();
@@ -70,17 +71,18 @@ test("list overview accepts both real CLI list shapes, keeps foreign diagnostics
   assert.deepEqual(listOverview({ available: [] }).installed, []); // envelope may omit installed
   for (const junk of ["garbage", null, 7, { diagnostics: [] }, {}]) assert.throws(() => listOverview(junk), /无法识别/);
 });
-test("missing auto setting defaults to on and tick checks plus installs", async (t) => {
-  const f = fixture(t); const before = fs.readFileSync(f.configFile, "utf8");
+test("missing auto setting stays offline without changing user settings", async (t) => {
+  const f = fixture(t, { plugin_auto_update: undefined }); const before = fs.readFileSync(f.configFile, "utf8");
   await f.updater.tick();
-  assert.equal(f.updater.status().auto, true); assert.equal(f.updater.status().phase, "updated");
-  assert.deepEqual(f.calls, [["marketplace", "update", "zusage-marketplace"], ["list", "--available"], ["update", PLUGIN_ID]]);
+  assert.equal(f.updater.status().auto, false); assert.equal(f.updater.status().phase, "idle");
+  assert.deepEqual(f.calls, []);
   assert.equal(fs.readFileSync(f.configFile, "utf8"), before);
 });
-test("missing config defaults to on without writing unrelated settings", async (t) => {
+test("missing config stays offline without creating settings", async (t) => {
   const f = fixture(t); fs.unlinkSync(f.configFile);
   await f.updater.tick();
-  assert.equal(f.updater.status().auto, true); assert.equal(f.updater.status().phase, "updated");
+  assert.equal(f.updater.status().auto, false); assert.equal(f.updater.status().phase, "idle");
+  assert.deepEqual(f.calls, []);
   assert.equal(fs.existsSync(f.configFile), false);
 });
 test("explicit false stays off across restarts and tick does not contact marketplace", async (t) => {
@@ -130,7 +132,7 @@ test("up-to-date and older marketplace versions never install", async (t) => {
   assert.equal(f.calls.filter((c) => c[0] === "update").length, 0); assert.equal(f.updater.status().phase, "current");
 });
 test("auto enable persists configuration and performs check plus install", async (t) => {
-  const f = fixture(t); await f.updater.request({ action: "auto", enabled: true });
+  const f = fixture(t, { plugin_auto_update: false }); await f.updater.request({ action: "auto", enabled: true });
   const cfg = JSON.parse(fs.readFileSync(f.configFile));
   assert.equal(cfg.plugin_auto_update, true); assert.equal(cfg.lang, "en"); assert.deepEqual(cfg.remote, { enabled: false });
   assert.equal(f.updater.status().phase, "updated");

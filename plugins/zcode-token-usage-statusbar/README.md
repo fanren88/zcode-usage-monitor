@@ -1,5 +1,7 @@
 # ZCode Token Usage Statusbar
 
+> **本地安全修复版：** 修复尚未发布到上游正式渠道。请使用本地源码安装；正式渠道更新可能覆盖修复。默认关闭自动更新与 SSH 自动发现；已有显式开启设置保留。诊断不转储 localStorage 值，数据库连接始终只读。
+
 在 ZCode 对话里查看生成速度、token 用量和上下文容量。
 
 本插件提供用量查询与回答速率；安装/修复悬浮状态条会修改客户端 `app.asar`，成功后需完全退出并重开。用量数据不上传，插件更新会从已配置的来源下载代码。
@@ -59,7 +61,7 @@
 
 **主面板归属**：主标签页（`workspace-main`）与各分栏按本窗口实际会话节点的 SID 和工作区身份路由，不从共享的 last-session、pane-layout 或工作台分组历史推断归属，因此其它窗口切换会话或清除记录不会改变本窗绑定。身份由版本、资产 SHA256 和唯一节点锚点校验的 renderer 补丁随宿主渲染更新；本窗可信 workspace IPC 与任务列表继续校验身份。节点身份缺失、协议不匹配或 SID 不一致时不借其它分栏或历史远端数据：无桥且本窗没有任何远端证据时按同 SID 的本地记录显示，否则显示零值。当前身份补丁已登记的客户端为 3.15.3、3.16.1、3.16.2；表外版本先经严格结构校验（唯一锚点、混淆名绑定与 store 形状）自动推导后补丁，校验不过则跳过并降级为数据库轮询。升级安装后需完全退出并重启客户端，旧补丁或未知构建不会启用共享记录回退。
 
-`remote.auto` 缺省 `true`，独立于旧开关；`remote.enabled: false` 关闭旧单通道/无身份 fallback，不关闭自动身份路由。手动目标以身份覆盖自动目标；关闭自动发现后需显式 `enabled: true` 才使用手动目标，未设置的 `script`、`python`、`timeout_s` 继承 `remote` 顶层。示例仅合并字段，身份需换成客户端实际值：
+`remote.auto` 缺省 `false`，仅显式布尔 `true` 开启，独立于旧开关；`remote.enabled: false` 关闭旧单通道/无身份 fallback，不关闭自动身份路由。手动目标以身份覆盖自动目标；关闭自动发现后需显式 `enabled: true` 才使用手动目标，未设置的 `script`、`python`、`timeout_s` 继承 `remote` 顶层。示例仅合并字段，身份需换成客户端实际值：
 
 ```json
 {
@@ -85,7 +87,7 @@
 
 ## 更新
 
-在 ⚙ 点击「检查更新」或「立即更新」。自动更新默认开，每 24 小时检查一次；明确关闭的设置会保留。
+在 ⚙ 点击「检查更新」或「立即更新」。本地安全修复版默认关闭自动更新；仅显式 `plugin_auto_update: true` 才每 24 小时检查一次，已有显式设置保留。
 
 本地市场不会自动 `git pull`。先自行更新源码，然后刷新 `zusage-marketplace` 并在插件页更新本插件；修改仓库不会自动修改安装缓存。GitHub 更新只使用正式 Release，包与市场清单必须一致。
 
@@ -105,7 +107,7 @@
 默认运行配置在 `~/.zcode/zcode-token-usage-statusbar/config.json`。保留原有设置，只修改需要的字段：
 
 - `answer_rate_line: false`：关闭回答速率行。
-- `plugin_auto_update: false`：关闭插件自动更新。
+- `plugin_auto_update: false`：关闭插件自动更新（本地安全修复版的缺省值）；显式 true 才开启。
 - `plugin_auto_install_overlay: false`：关闭新建/恢复会话时自动安装/修复状态条；默认开，成功后仍需完全退出并重开。
 
 Windows 若没有 `python3`，需要把 `.mcp.json` 和 `hooks/hooks.json` 中的 Python 命令改成可用的名称，再刷新安装。

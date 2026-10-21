@@ -1,5 +1,7 @@
 # 安装、配置与排查
 
+> **本地安全修复版：** 本文涉及的关闭默认值与诊断收紧只适用于本地修复源码，尚未发布到上游正式 Release。请从本地源码安装；更新可能覆盖修复，已有显式开启的配置会保留。
+
 [返回首页](../README.zh-CN.md) · [功能截图](features.md) · [开发与发布](maintaining.md)
 
 这份文档面向需要自定义安装、远程查询或彻底清理的用户。日常使用通常不需要改配置文件。
@@ -125,6 +127,12 @@ python3 install.py --root /Applications/ZCode.app
 
 ## 更新与客户端升级
 
+### 本地版的刷新与数据状态
+
+桌面版复用订阅快照，桥接健康检查至多每秒一次，计时文字每 250ms 刷新，消息扫描每秒一次，分栏与几何重查每 1.2 秒一次。窗口页面隐藏时暂停视觉轮询和扫描，恢复可见时刷新；查询和订阅仍维护数据。以上为刷新调度，未据此测定实机 CPU 或内存降幅。Web 浮层保持独立实现。
+
+查询失败时，状态条显示「数据已过期」并保留同会话、同工作区和同远端目标的成功快照；悬停提示最后成功刷新时间。没有可用成功快照时显示「数据不可用」或「数据库不可用」及「等待可用数据」，避免把失败显示成真实零用量。本地数据库故障不影响正常远端分栏；恢复成功后提示自动消失。本地失败也会定时重试，无须等待数据库有新写入。
+
 ### 插件更新
 
 正式渠道可在 ⚙ 检查或安装更新，也可以按以下步骤手动更新：
@@ -139,7 +147,7 @@ python3 install.py --root /Applications/ZCode.app
 状态条 **⚙ → 插件更新** 还提供「检查更新」「立即更新」和「自动更新」：
 
 - **检查更新**不会安装；发现新版后可点「立即更新」。
-- **自动更新默认开启**，首次运行检查，之后按 24 小时间隔检测与安装；你显式关闭的设置会保留。
+- **本地安全修复版默认关闭自动更新**，仅 `plugin_auto_update: true` 时才按 24 小时间隔检测与安装；缺配置/缺字段不会联网检查，已有显式开启或关闭的设置保留。手动检查/立即更新仍可用。
 - GitHub 来源需正式 Release 与市场清单一致；新远程安装使用 `#plugin-releases`。源码分支或本地目录安装没有可校验的 Release，点「检查更新」会直接提示"不支持自动更新"，不会回退到开发分支取包：先 `git pull` 重装，或迁移到正式渠道。
 - GitCode 渠道的版本检查读宿主从注册 ref 拉取的渠道清单，ZIP 从 GitCode Release 资产下载并核对 SHA256；渠道清单与资产不一致时直接报错，不做自动重试。
 - 更新区固定显示一句可直接复制的重装指令：「更新zcode 插件 https://github.com/ByteRax/zcode-token-usage-statusbar」。更新失败时把它发给 ZCode，让助手帮你重装。
@@ -192,7 +200,7 @@ Windows 对应用户目录下的 `.zcode\zcode-token-usage-statusbar\config.json
   "lang": "zh",
   "hot_reload": true,
   "answer_rate_line": true,
-  "plugin_auto_update": true,
+  "plugin_auto_update": false,
   "plugin_auto_install_overlay": true,
   "context_window": 1000000
 }
@@ -204,7 +212,7 @@ Windows 对应用户目录下的 `.zcode\zcode-token-usage-statusbar\config.json
 | `python_path` | Python 可执行文件；安装器会设置，无法启动 Python 时检查 |
 | `hot_reload` | 状态条脚本是否热更新 |
 | `answer_rate_line` | 插件回答末尾的速率行，默认开，下一问生效 |
-| `plugin_auto_update` | 插件自动更新，默认开；损坏或非布尔配置不会启动更新 |
+| `plugin_auto_update` | 插件自动更新，默认关；仅显式 true 开启，缺失/损坏/非布尔配置不会启动更新 |
 | `plugin_auto_install_overlay` | 自动安装/修复客户端注入，默认开（缺配置或缺字段）；显式 false 保留，环境变量优先，卸载豁免仍阻止；无环境变量覆盖时损坏或非布尔配置不开启 |
 | `context_window` | 自动识别失败时的上下文窗口大小兜底 |
 | `resident` | 使用常驻 Python 查询进程，默认开 |
@@ -262,7 +270,7 @@ ssh -o BatchMode=yes user@server 'python3 ~/.zcode/zcode-token-usage-statusbar/z
 }
 ```
 
-- `remote.auto` 缺省为 `true`，独立控制自动发现/身份路由。
+- `remote.auto` 缺省为 `false`；仅显式布尔 `true` 才读取已保存的 SSH 连接，独立控制自动发现/身份路由。上面的示例是主动开启自动模式的配置。
 - `remote.enabled: false` 保留为旧单通道/无身份 fallback 的手动关闭，不关闭已确认身份的自动路由。
 - `remote.auto: false` 关闭自动发现；手动使用带身份的 `targets` 时需显式 `enabled: true`。
 - 不再查询任何远端时，设置 `auto: false`、`enabled: false`；已有 `targets` 可保留而不会执行：
@@ -306,7 +314,7 @@ ssh -o BatchMode=yes user@server 'python3 ~/.zcode/zcode-token-usage-statusbar/z
 }
 ```
 
-`targets` 在自动模式或显式 `enabled: true` 时接收；`auto: false` 且 `enabled` 非 true 为总关闭。用 `identity` 绑定一个工作区，或用 `identities` 绑定同一目标的多个工作区。目标的 `script`、`python`、`timeout_s` 未设置时继承 `remote` 顶层值。多个目标不应争抢同一身份；不带身份的多机配置不能实现精准 route。
+`targets` 仅在显式 `auto: true` 或 `enabled: true` 时接收；两项都不是布尔 true 时为总关闭。用 `identity` 绑定一个工作区，或用 `identities` 绑定同一目标的多个工作区。目标的 `script`、`python`、`timeout_s` 未设置时继承 `remote` 顶层值。多个目标不应争抢同一身份；不带身份的多机配置不能实现精准 route。
 
 ### 旧 CLI 单通道 fallback（显式开启，非桌面空 scope 兜底）
 
@@ -331,7 +339,7 @@ ssh -o BatchMode=yes user@server 'python3 ~/.zcode/zcode-token-usage-statusbar/z
 
 远端按 `poll_ms` 刷新，默认 3000ms、最少 1000ms，首次查询即建立续查定时器；本地仍以数据库写入事件触发。单目标 `timeout_s` 限制 1–6 秒，最多 4 个并行查询、整轮总预算 6 秒；配置更大值不能突破预算。失败或暂未找到会话持续退避重试，包括已确认远端 scope 尚未配置目标的情况；总关闭则停止远端轮询。
 
-有效失败条目保留最近成功的同工作区快照并标为 stale/error；首次无缓存显示零值，不借本地今日量。null/error 响应不清空最近成功的显示，不代表取得成功新数据。不需要为了短暂断线反复安装状态条；宿主自身断线需先由宿主/用户恢复连接。配置或客户端连接设置变化、关闭后重新开启由心跳检测（默认 30000ms、最少 10000ms），不是修改文件后立即生效。
+有效失败条目保留最近成功的同工作区、同目标快照，桌面状态条标为「数据已过期」；首次无缓存显示不可用提示，不借本地今日量。null/error 响应不清空最近成功的显示，不代表取得成功新数据。不需要为了短暂断线反复安装状态条；宿主自身断线需先由宿主/用户恢复连接。配置或客户端连接设置变化、关闭后重新开启由心跳检测（默认 30000ms、最少 10000ms），不是修改文件后立即生效。
 
 1. 确认本机确实加载新版安装副本且完全重启过。
 2. 确认远端脚本、Python、数据库读取权限和免交互 SSH 命令可用；认证失败先修认证，不是重装插件。
@@ -405,7 +413,7 @@ python3 patch_install.py check
 
 `patch_install.py` standalone 运行（不经 install.py/overlay_install.py 拉起）不会自动探测安装位置；非默认位置须传 `--asar <app.asar 完整路径>` 或设置环境变量 `ZCODE_ASAR`（命令行参数优先），否则会按平台默认位置猜测，猜错时报 `FileNotFoundError`。`install --finalize` 还须额外传 `--runtime <运行时目录>` 或设 `ZCODE_RUNTIME`：pending TMP 的 sidecar 记录了生成时的运行时目录，standalone 默认用脚本自身所在目录，插件安装的运行时数据目录通常不是同一个，不传会被来源授权校验拒绝；`remove`/`check` 不需要这个参数。收尾/卸载失败后的提示会给出带正确路径的完整命令，照着复制执行即可。
 
-运行目录中的 `plugin-session-start.json` 是启动钩子诊断，`plugin-update.json` 是更新状态，`diag-*.json` 是窗口诊断。没有自然启动事件记录时，手动脚本成功不能证明钩子自动执行过；空闲时窗口诊断不持续更新并不等于故障。
+运行目录中的 `plugin-session-start.json` 是启动钩子诊断，`plugin-update.json` 是更新状态，`diag-*.json` 是窗口诊断。本地安全修复版只写固定 schema 的版本、布局矩形、计数和错误存在性，不保存 localStorage 值、正文、URL、路径或会话 ID。旧版留下的文件不会因源码修改而自动清除；分享日志前还需检查启动/更新诊断中的路径和标识。没有自然启动事件记录时，手动脚本成功不能证明钩子自动执行过；空闲时窗口诊断不持续更新并不等于故障。
 
 ## 彻底卸载
 

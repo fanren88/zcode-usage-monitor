@@ -76,6 +76,7 @@ test("loader keeps polling controls while an update action is still awaiting the
     executeJavaScript: async () => queue.splice(0, 8) };
   const sandbox = { pluginRequestBusy: false, process: { resourcesPath: "/fixture/resources" }, path,
     fileURLToPath: require("url").fileURLToPath, isMainWindowState: () => true,
+    windowDocument: () => 0, sameWindowDocument: () => true,
     webContents: { getAllWebContents: () => [wc] }, LOG: () => {}, setTimeout: () => 1,
     pluginUpdater: { request: (req) => { requests.push(req); return req.action === "update" ? pending : Promise.resolve(); } } };
   vm.runInNewContext(actionSource, sandbox);

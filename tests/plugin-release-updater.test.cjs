@@ -35,7 +35,8 @@ function fixture(t, settings = {}, customStorage = false, variant = "github") {
   const recordFile = path.join(inventory, "installed_plugins.json");
   const knownFile = path.join(inventory, "known_marketplaces.json");
   const catalogFile = path.join(marketRoot, "marketplace.json");
-  writeJson(configFile, { python_path: "python3", lang: "en", ...settings });
+  // Release auto-update tests explicitly opt in; missing settings stay offline.
+  writeJson(configFile, { python_path: "python3", lang: "en", plugin_auto_update: true, ...settings });
   const source = variant === "gitcode"
     ? { source: "git", url: `https://gitcode.com/${GITCODE_REPOSITORY}.git`, ref: "plugin-releases-gitcode" }
     : { source: "github", repo: REPOSITORY, ref: "plugin-releases" };
@@ -233,6 +234,16 @@ for (const mode of ["manual", "auto"]) {
     assert.deepEqual(f.events, ["fetch", "list"]); assertNoInstall(f);
   });
 }
+
+test("GitHub and GitCode channels stay offline until automatic updates are explicitly enabled", async t => {
+  for (const variant of ["github", "gitcode"]) {
+    const f = fixture(t, { plugin_auto_update: undefined }, false, variant);
+    await f.updater.tick(); await f.restart().tick();
+    assert.equal(f.updater.status().auto, false);
+    assert.deepEqual(f.events, []);
+    assert.deepEqual(f.calls, []);
+  }
+});
 
 test("automatic opt-out survives restart without network while manual Release update remains available", async (t) => {
   const f = fixture(t, { plugin_auto_update: false });

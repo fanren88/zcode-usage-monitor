@@ -9,7 +9,8 @@ const A = "remote:ssh:a:22:u:/p", B = "remote:ssh:b:22:u:/p";
 function extract(start, end) { return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))); }
 function sessionFixture(mainScope) {
   const context = vm.createContext({ remoteCache: {}, remoteTodayCache: {}, Object,
-    window: {}, stale: () => false, state: {}, instances: [], FATAL: {}, nativeCtxVal: 0 });
+    window: {}, stale: () => false, state: {}, instances: [], FATAL: {}, nativeCtxVal: 0,
+    saved: null, localFailed: false, delivery: false, failed: false, present: true, key: '', health: {} });
   if (mainScope !== undefined) context.mainScopeNow = mainScope;
   vm.runInContext(extract("  function sessionFor(", "  window.__zusagePluginRequests"), context);
   const pick = (d, sid = "sA", pid = "auto") => context.sessionFor(d, sid, pid);
@@ -51,6 +52,17 @@ test("failed scoped snapshot keeps prior success without cross-target substituti
   assert.equal(other.requests, undefined); assert.equal(other.workspace_identity, B);
   assert.equal(pick({ scope_bindings: { sA: A }, recent: [{ sid: "sA", workspace_identity: A, remote: true, requests: 8 }] }).requests, 8);
 });
+test("remote stale snapshots retain their successful timestamp across failed queries", () => {
+  const pick = sessionFixture();
+  const row = { sid: 'sA', workspace_identity: A, remote: true, remote_target: 'a', requests: 7 };
+  pick({ scope_bindings: { sA: A }, recent: [row], data_health: { state: 'fresh', updated_at: 1000 } });
+  // A global failed response must not update the remote success time either.
+  pick({ scope_bindings: { sA: A }, recent: [row], data_health: { state: 'stale', updated_at: 2000 } });
+  const failed = pick({ scope_bindings: { sA: A }, recent: [{ ...row, remote_missing: true, remote_error: 'failed' }],
+    data_health: { state: 'fresh', updated_at: 3000 } });
+  assert.equal(failed.remote_stale, true);
+  assert.equal(failed.remote_updated_at, 1000);
+});
 test("same identity target override cannot reuse old target session or today; new target recovers independently", () => {
   const pick = sessionFixture();
   const payload = (target, requests, error = "") => ({
@@ -84,7 +96,8 @@ test("same identity target override cannot reuse old target session or today; ne
 test("per-target today and errors never fall back to another host or local today", () => {
   const code = extract('      var myTarget = p.remote_target || "";', "      lastSub = view.sub;");
   function view(p, d) {
-    const ctx = { p, d, remoteTodayCache: {}, nativeCtxVal: 0 };
+    const ctx = { p, d, remoteTodayCache: {}, nativeCtxVal: 0,
+      saved: null, localFailed: false, delivery: false, failed: false, present: true, key: '', health: {} };
     vm.runInNewContext(code, ctx); return ctx.view;
   }
   const d = { today: { requests: 99 }, remote_today: { a: { requests: 1 }, b: { requests: 2 } }, remote_errors: { b: "B failed" }, remote_error: "B failed" };

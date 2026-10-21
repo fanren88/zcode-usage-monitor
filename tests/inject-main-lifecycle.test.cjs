@@ -113,7 +113,7 @@ test('idle/config-off/no-window/quit stop resident and never schedule unconditio
 });
 
 test('one-shot error/close and timeout share single settlement, preserving remote polling', async () => {
-  const h = harness(); await flush(); h.evalCode('stopResident()'); h.setCfg({ resident: false });
+  const h = harness(); await flush(); h.evalCode('stopResident()'); h.setCfg({ resident: false, remote: { auto: true } });
   h.evalCode('lastHadRemote = true; runQuery({ sids: ["remote_sid"], scopes: [] })'); const p = h.procs.at(-1);
   assert.equal(p.request, undefined);
   p.emit('error', new Error('ENOENT')); h.evalCode('busy = true'); p.emit('close', 1);

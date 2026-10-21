@@ -12,7 +12,7 @@ INTERVAL_MS = 24 * 60 * 60 * 1000
 
 
 def start_auto_update(runtime, pi):
-    """默认后台检查更新，保留显式关闭；最终限频与跨进程锁由 Node 负责。"""
+    """仅显式开启才后台检查更新；最终限频与跨进程锁由 Node 负责。"""
     try:
         runtime = Path(runtime)
         cfg = json.loads((runtime / "config.json").read_text(encoding="utf-8"))
@@ -20,7 +20,7 @@ def start_auto_update(runtime, pi):
         cfg = {}
     except (OSError, ValueError, TypeError):
         return False
-    if not isinstance(cfg, dict) or cfg.get("plugin_auto_update", True) is not True:
+    if not isinstance(cfg, dict) or cfg.get("plugin_auto_update") is not True:
         return False
 
     # 远程会话或本机 asar 不可读时保持静默，不产生安装/更新提示。

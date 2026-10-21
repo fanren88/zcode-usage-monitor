@@ -128,7 +128,7 @@
     const update = () => {
       if (closed) return;
       const state = store.getState();
-      if (tracker.ingest(state && state.snapshot)) changed();
+      if (tracker.ingest(state && state.snapshot)) changed(state);
     };
     const off = store.subscribe(update);
     if (typeof off !== 'function') { closed = true; return null; }

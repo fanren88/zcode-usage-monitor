@@ -64,7 +64,7 @@ class DiscoveryTests(IsolatedTests):
         write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("A")]})
         with mock.patch.dict(os.environ, {"ZCODE_DESKTOP_HOME_DIR": " " + self.tmp.name + " "}):
             self.assertEqual(zusage._desktop_setting_path(), Path(self.tmp.name) / ".zcode/v2/setting.json")
-            self.assertEqual(zusage._auto_targets({})[0]["identities"], [A])
+            self.assertEqual(zusage._auto_targets({"remote": {"auto": True}})[0]["identities"], [A])
 
     def test_legacy_history_and_reference(self):
         legacy = dict(entry("a"), id="old")
@@ -72,13 +72,13 @@ class DiscoveryTests(IsolatedTests):
                         {"lastWorkspaceSession": [{"kind": "remote", "historyId": "old"}],
                          "remoteWorkspaceHistory": [legacy]}):
             write_setting(self.tmp.name, payload)
-            self.assertEqual(zusage._auto_targets({})[0]["identities"], [A])
+            self.assertEqual(zusage._auto_targets({"remote": {"auto": True}})[0]["identities"], [A])
 
     def test_merge_and_password_skip(self):
         pwd = entry("password")
         pwd["target"]["passwordCredentialKey"] = "secret-ref"
         write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("A"), entry("a", "/other"), pwd]})
-        rows = zusage._auto_targets({})
+        rows = zusage._auto_targets({"remote": {"auto": True}})
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["ssh_argv"], ["ssh", "-o", "BatchMode=yes", "u@A"])
         self.assertEqual(len(rows[0]["identities"]), 2)
@@ -87,24 +87,37 @@ class DiscoveryTests(IsolatedTests):
         alias = entry("a")
         alias["target"].update(sshConfigAlias="alias", privateKeyPath="/key")
         write_setting(self.tmp.name, {"remoteWorkspaceHistory": [alias]})
-        self.assertEqual(zusage._auto_targets({})[0]["ssh_argv"], ["ssh", "-o", "BatchMode=yes", "alias"])
+        self.assertEqual(zusage._auto_targets({"remote": {"auto": True}})[0]["ssh_argv"], ["ssh", "-o", "BatchMode=yes", "alias"])
 
     def test_bad_json_shape_and_deleted_setting(self):
         path = write_setting(self.tmp.name, [])
-        self.assertEqual(zusage._auto_targets({}), [])
+        self.assertEqual(zusage._auto_targets({"remote": {"auto": True}}), [])
         write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("a")]})
-        self.assertEqual(len(zusage._auto_targets({})), 1)
+        self.assertEqual(len(zusage._auto_targets({"remote": {"auto": True}})), 1)
         path.unlink()
-        self.assertEqual(zusage._auto_targets({}), [])
+        self.assertEqual(zusage._auto_targets({"remote": {"auto": True}}), [])
 
 
 class SetupTests(IsolatedTests):
+    def test_missing_or_invalid_opt_in_never_reads_saved_connections(self):
+        write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("a")]})
+        configs = [{}, {"remote": {}}, {"remote": {"enabled": False}},
+                   {"remote": {"enabled": True, "targets": [{"ssh": "ssh manual", "identity": B}]}}]
+        configs += [{"remote": {"auto": value}} for value in (None, 0, 1, "true", "false", [], {})]
+        with mock.patch.object(zusage, "_read_client_remote_entries", side_effect=AssertionError("discovery forbidden")):
+            for cfg in configs:
+                with self.subTest(cfg=cfg):
+                    setup = zusage._remote_setup(cfg)
+                    self.assertEqual(zusage._auto_targets(cfg), [])
+                    if setup:
+                        self.assertNotIn(A, setup["identities"])
+
     def test_empty_auto_does_not_read_real_home(self):
-        self.assertIsNone(zusage._remote_setup({}))
+        self.assertIsNone(zusage._remote_setup({"remote": {"auto": True}}))
 
     def test_enabled_false_disables_legacy_ssh_not_auto(self):
         write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("a")]})
-        setup = zusage._remote_setup({"remote": {"enabled": False, "ssh": "ssh placeholder"}})
+        setup = zusage._remote_setup({"remote": {"auto": True, "enabled": False, "ssh": "ssh placeholder"}})
         self.assertEqual(len(setup["targets"]), 1)
         self.assertIsNone(setup["default"])
         self.assertIsNone(zusage._remote_setup({"remote": {"enabled": False, "auto": False,
@@ -113,7 +126,7 @@ class SetupTests(IsolatedTests):
     def test_targets_available_in_auto_and_manual_and_override(self):
         write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("a")]})
         for enabled in (False, True):
-            setup = zusage._remote_setup({"remote": {"enabled": enabled, "python": "/venv/python",
+            setup = zusage._remote_setup({"remote": {"auto": True, "enabled": enabled, "python": "/venv/python",
                 "script": "~/custom usage.py", "timeout_s": 3,
                 "targets": [{"ssh": "ssh override", "identities": [A]}]}})
             rc = setup["targets"][setup["identities"][A]]
@@ -122,9 +135,9 @@ class SetupTests(IsolatedTests):
 
     def test_stable_key_after_insert_remove_reorder_workspace(self):
         write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("b")]})
-        before = zusage._remote_setup({})["identities"][B]
+        before = zusage._remote_setup({"remote": {"auto": True}})["identities"][B]
         write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("a"), entry("b", "/z"), entry("b")]})
-        self.assertEqual(zusage._remote_setup({})["identities"][B], before)
+        self.assertEqual(zusage._remote_setup({"remote": {"auto": True}})["identities"][B], before)
         one = {"ssh": "ssh a", "identity": A}
         two = {"ssh": "ssh b", "identity": B}
         s1 = zusage._remote_setup({"remote": {"enabled": True, "auto": False, "targets": [one, two]}})
@@ -135,11 +148,11 @@ class SetupTests(IsolatedTests):
         write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("a")]})
         with mock.patch.dict(os.environ, {"ZUSAGE_REMOTE_CHILD": "1"}):
             for cfg in ({}, {"remote": {"enabled": True, "ssh": "ssh a"}},
-                        {"remote": {"targets": [{"ssh": "ssh a", "identity": A}]}}):
+                        {"remote": {"enabled": True, "targets": [{"ssh": "ssh a", "identity": A}]}}):
                 self.assertIsNone(zusage._remote_setup(cfg))
 
     def test_bad_target_does_not_disable_healthy_target(self):
-        setup = zusage._remote_setup({"remote": {"targets": [
+        setup = zusage._remote_setup({"remote": {"enabled": True, "targets": [
             {"identity": A}, {"ssh": "ssh broken", "timeout_s": "invalid"},
             {"ssh": "ssh good", "identity": B}]}})
         self.assertEqual(len(setup["targets"]), 1)
@@ -193,7 +206,7 @@ class ExecTests(IsolatedTests):
 class FetchTests(IsolatedTests):
     def test_auto_unknown_local_sid_never_probed(self):
         write_setting(self.tmp.name, {"lastWorkspaceSession": [entry("a")]})
-        setup = zusage._remote_setup({})
+        setup = zusage._remote_setup({"remote": {"auto": True}})
         with mock.patch.object(zusage, "_remote_exec") as run:
             self.assertEqual(zusage._remote_fetch(["s"], set(), setup), ({}, {}, {}))
             zusage._remote_fetch(["s"], set(), setup, scopes=[("s", "/local")])
@@ -252,7 +265,7 @@ class FetchTests(IsolatedTests):
     def test_timeout_budget_is_bounded_with_queued_targets(self):
         targets = [{"ssh": "ssh host" + str(i), "identity": "remote:ssh:h" + str(i) + ":22:u:/p"}
                    for i in range(8)]
-        setup = zusage._remote_setup({"remote": {"targets": targets, "timeout_s": 100}})
+        setup = zusage._remote_setup({"remote": {"enabled": True, "targets": targets, "timeout_s": 100}})
         scopes = [("s", target["identity"]) for target in targets]
         active, maximum = 0, 0
         lock = threading.Lock()
@@ -295,7 +308,7 @@ class FetchTests(IsolatedTests):
         spec.loader.exec_module(mod)
         con.executescript(mod.SCHEMA)
         con.execute("insert into session(id,title) values ('s','local')")
-        cfg = {"context_window": 1, "remote": {"targets": [{"ssh": "ssh a", "identity": A}]}}
+        cfg = {"context_window": 1, "remote": {"enabled": True, "targets": [{"ssh": "ssh a", "identity": A}]}}
         with mock.patch.object(zusage, "connect", return_value=con), \
                 mock.patch.object(zusage, "load_config", return_value=cfg), \
                 mock.patch.object(zusage, "_remote_exec", return_value=({"s": {"sid": "s", "requests": 99}}, {}, None)):
@@ -325,7 +338,7 @@ class ProtocolSnapshotTests(IsolatedTests):
         self.assertEqual(zusage._parse_query(json.dumps(request)), ("s", request["scopes"]))
 
     def test_main_and_serve_json_equal_without_db(self):
-        cfg = {"context_window": 128000, "remote": {"targets": [{"ssh": "ssh a", "identity": A}]}}
+        cfg = {"context_window": 128000, "remote": {"enabled": True, "targets": [{"ssh": "ssh a", "identity": A}]}}
         request = json.dumps({"sids": ["s"], "scopes": [{"sid": "s", "workspaceIdentity": A}]})
         def fake(sids, rc, key):
             return {"s": {"sid": "s", "requests": 42}}, {"requests": 8}, None
@@ -377,7 +390,7 @@ class ProtocolSnapshotTests(IsolatedTests):
                     self.assertEqual(payload["remote_today"][row["remote_target"]], {"requests": 8})
 
     def test_light_local_failure_preserves_remote(self):
-        cfg = {"context_window": 128000, "remote": {"targets": [{"ssh": "ssh a", "identity": A}]}}
+        cfg = {"context_window": 128000, "remote": {"enabled": True, "targets": [{"ssh": "ssh a", "identity": A}]}}
         con = mock.Mock()
         class _cursor(list):          # 兼具真实 sqlite 游标两种用法：可迭代 + fetchone
             def fetchone(self):

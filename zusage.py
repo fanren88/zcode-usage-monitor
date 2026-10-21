@@ -32,16 +32,13 @@ def load_config():
 
 
 def connect():
-    """只读连接优先；WAL shm 不可用时退回普通连接（全程只 SELECT）。
-    fallback 前先确认文件存在：sqlite3.connect 对不存在的路径会新建空库，
-    可能与尚未初始化数据库的 ZCode 产生交互（v32 审查修复）。"""
+    """始终只读；路径先 URI 编码，连接失败也不能退回可写句柄或新建数据库。"""
+    con = sqlite3.connect(DB_PATH.resolve().as_uri() + "?mode=ro", uri=True, timeout=3)
     try:
-        con = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode=ro", uri=True, timeout=3)
-        con.execute("select 1 from model_usage limit 1").fetchone()
-    except sqlite3.OperationalError:
-        if not DB_PATH.exists():
-            raise
-        con = sqlite3.connect(str(DB_PATH), timeout=3)
+        con.execute("pragma query_only=1")
+    except Exception:
+        con.close()
+        raise
     con.row_factory = sqlite3.Row
     return con
 
@@ -959,11 +956,11 @@ def _ssh_identity(host, port, username, path):
 
 
 def _auto_targets(cfg):
-    """客户端 setting.json → 自动 SSH 目标列表。auto:false 或递归子查询（ZUSAGE_REMOTE_CHILD=1）
+    """客户端 setting.json → 自动 SSH 目标列表。未显式 auto:true 或递归子查询（ZUSAGE_REMOTE_CHILD=1）
     时返回 []。同一连接（别名/密钥+主机+端口+用户）多个工作区合并为一条通道、identities 聚合；
     纯密码凭据（passwordCredentialKey 且无密钥/别名）无法免交互，跳过。"""
     r = cfg.get("remote")
-    if isinstance(r, dict) and r.get("auto") is False:
+    if not isinstance(r, dict) or r.get("auto") is not True:
         return []
     if os.environ.get("ZUSAGE_REMOTE_CHILD") == "1":
         return []
@@ -1040,7 +1037,7 @@ def _remote_setup(cfg):
         return None
     r = cfg.get("remote")
     r = r if isinstance(r, dict) else {}
-    if r.get("auto") is False and r.get("enabled") is not True:
+    if r.get("auto") is not True and r.get("enabled") is not True:
         return None
     targets, identities = {}, {}
     default = None
@@ -1062,7 +1059,7 @@ def _remote_setup(cfg):
             identities[ident] = key
         return key
 
-    if r.get("auto") is not False:
+    if r.get("auto") is True:
         for ent in _auto_targets(cfg):
             add(ent)
     # 后加入的手动 identity 覆盖自动连接参数，不依赖目标列表顺序。
@@ -1076,7 +1073,7 @@ def _remote_setup(cfg):
     if not targets:
         return None
     return {"targets": targets, "default": default, "identities": identities,
-            "auto": r.get("auto") is not False}
+            "auto": r.get("auto") is True}
 
 
 def _parse_routes(s):

@@ -4,12 +4,12 @@
   "heartbeat_ms": 30000,
   "hot_reload": true,
   "answer_rate_line": true,
-  "plugin_auto_update": true,
+  "plugin_auto_update": false,
   "plugin_auto_install_overlay": true,
   "context_window": 1000000,
   "lang": "zh",
   "remote": {
-    "auto": true,
+    "auto": false,
     "enabled": false,
     "ssh": "ssh 用户名@服务器地址",
     "targets": [

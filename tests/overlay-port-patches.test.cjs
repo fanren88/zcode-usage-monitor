@@ -70,6 +70,7 @@ function runCoordinator(candidates) {
     document: { body: makeEl('body'), querySelectorAll: () => candidates },
     innerHeight: 900,
     stale: () => false,
+    pageHidden: () => false,
     instances,
     nextSlot: 0,
     spawnInstance: (pid, slot) => {

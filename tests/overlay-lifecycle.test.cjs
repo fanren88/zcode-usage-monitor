@@ -58,7 +58,7 @@ function harness() {
   });
   const executable = source.replace(/\}\)\(\);\s*$/, 'window.lifecycleTest = { instances: function() { return instances; } };})();');
   function inject() { window.__zusageOverlay = false; vm.runInContext(executable, sandbox); }
-  function tick() { for (const t of [...timers.values()]) if (t.interval && t.ms === 600) t.fn(); }
+  function tick() { for (const t of [...timers.values()]) if (t.interval && t.ms === 1200) t.fn(); }
   function boot() { for (const [n, t] of [...timers]) if (!t.interval && t.ms === 0) { timers.delete(n); t.fn(); } }
   function setPanes(keys, opts = {}) {
     panes = keys.map(k => { const card = body.appendChild(new Element()); card.style.marginBottom = k + 'px';

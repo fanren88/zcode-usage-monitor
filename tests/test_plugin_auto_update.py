@@ -90,7 +90,7 @@ class PluginAutoUpdateTests(unittest.TestCase):
                 self.write_config({"plugin_auto_update": value})
                 self.assert_silent_skip()
 
-    def test_missing_auto_setting_or_config_defaults_to_on(self):
+    def test_missing_auto_setting_or_config_stays_offline(self):
         for config in ({}, {"lang": "en", "plugin_auto_install_overlay": False}, None):
             with self.subTest(config=config):
                 self.popen.reset_mock()
@@ -100,8 +100,8 @@ class PluginAutoUpdateTests(unittest.TestCase):
                 else:
                     self.write_config(config)
                 before = path.read_bytes() if path.exists() else None
-                self.assertEqual(self.launch(), (True, ""))
-                self.popen.assert_called_once()
+                self.assertEqual(self.launch(), (False, ""))
+                self.popen.assert_not_called()
                 self.assertEqual(path.read_bytes() if path.exists() else None, before)
                 self.assertEqual(self.asar.read_bytes(), b"test fixture")
 

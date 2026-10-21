@@ -80,7 +80,7 @@ function harness() {
   });
   const executable = source.replace(/\}\)\(\);\s*$/, 'window.ctxBtnTest = { instances: function() { return instances; } };})();');
   function inject() { window.__zusageOverlay = false; vm.runInContext(executable, sandbox); }
-  function tick() { for (const t of [...timers.values()]) if (t.interval && (t.ms === 600 || t.ms === 500)) t.fn(); }
+  function tick() { for (const t of [...timers.values()]) if (t.interval && (t.ms === 1200 || t.ms === 1000)) t.fn(); }
   function boot() { for (const [n, t] of [...timers]) if (!t.interval && t.ms === 0) { timers.delete(n); t.fn(); } }
   function buildComposer(pid, sid, { ariaLabel = '上下文已用 63,400 / 总量 200,000' } = {}) {
     const card = body.appendChild(new Element());

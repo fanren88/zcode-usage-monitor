@@ -304,7 +304,7 @@ function createUpdater(options) {
   }
   function refreshLocal() {
     const config = readConfig(configFile);
-    state.auto = !!config && (!Object.prototype.hasOwnProperty.call(config, "plugin_auto_update") || config.plugin_auto_update === true);
+    state.auto = !!config && config.plugin_auto_update === true;
     let record = null;
     localError = "";
     try { record = installedRecord(); } catch (error) { localError = error.message; }
