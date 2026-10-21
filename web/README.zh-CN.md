@@ -77,6 +77,9 @@
 ## 安装
 
 ```bash
+git clone https://github.com/fanren88/zcode-usage-monitor.git
+cd zcode-usage-monitor
+
 # 1) 放好文件（示例路径）
 sudo mkdir -p /opt/zcode-token-usage-statusbar
 sudo cp -r . /opt/zcode-token-usage-statusbar/          # 整个仓库，sidecar 要用到 ../zusage.py

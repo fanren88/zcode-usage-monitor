@@ -1,20 +1,12 @@
-> **ZCode Usage Monitor 安全加固分支：** 本仓库为 `fanren88/zcode-usage-monitor`，基于 [ByteRax/zcode-token-usage-statusbar](https://github.com/ByteRax/zcode-token-usage-statusbar) 修改，保留原作者署名及 MIT 许可证。包含隐私修复、窗口来源校验、刷新优化和数据过期提示；插件内部名称保持兼容。此分支尚无正式 Release，下文保留的上游更新渠道不包含本分支修复。请用本仓库源码安装：
-
-```bash
-git clone https://github.com/fanren88/zcode-usage-monitor.git
-cd zcode-usage-monitor
-python3 install.py
-```
-
-安装后完全退出并重开 ZCode。Windows 可将 `python3` 换成 `python`。
+> **ZCode Usage Monitor 安全加固版：** 本仓库为 `fanren88/zcode-usage-monitor`，基于 [ByteRax/zcode-token-usage-statusbar](https://github.com/ByteRax/zcode-token-usage-statusbar) 修改，保留原作者署名及 MIT 许可证。以下安装与更新指令均使用本仓库的 `main` 源码；目前没有正式 Release 或 GitCode 镜像。
 
 <div align="center">
 
-> **本地安全修复版：** 本检出包含尚未发布至上游正式渠道的隐私修复。请从本地源码安装；切换正式 Release 或更新可能覆盖修复。默认关闭自动更新与 SSH 自动发现，已有显式开启设置保留。诊断仅保留必要状态，详见 [.github/SECURITY.md](.github/SECURITY.md)。
+> **本仓库安全加固版：** 本检出包含尚未发布至上游正式渠道的隐私修复。请从本仓库源码安装；切换正式 Release 或更新可能覆盖修复。默认关闭自动更新与 SSH 自动发现，已有显式开启设置保留。诊断仅保留必要状态，详见 [.github/SECURITY.md](.github/SECURITY.md)。
 
 > **桌面本地优化：** 统一校验本地窗口与主 frame，复用订阅快照并暂停隐藏页面的视觉轮询；查询失败显示过期/不可用状态与最后成功时间。详见[使用指南](docs/user-guide.md#本地版的刷新与数据状态)。
 
-# ZCode Token 速度状态栏
+# ZCode Usage Monitor · Token 用量状态栏
 
 **让 ZCode 的对话窗口底部多一条小状态栏：模型有多快、token 花了多少、上下文还剩多少，一眼看到。**
 
@@ -35,14 +27,12 @@ Windows / macOS · Python 3.8+ · [MIT](LICENSE)
 把这句话发给 ZCode：
 
 ```text
-安装或者更新 zcode 插件 https://github.com/ByteRax/zcode-token-usage-statusbar，执行完毕后，运行命令 /install-overlay
+安装或者更新 zcode 插件 https://github.com/fanren88/zcode-usage-monitor，执行完毕后，运行命令 /install-overlay
 ```
 
 它会先把插件装好，再执行 `/install-overlay` 装上状态条——要是它没自己跑，你就在对话框里手动敲一次。然后**完全退出 ZCode 再重新打开**（关窗口不算），底部就多出那条小状态栏了。详细说明见[快速开始](#快速开始)。
 
-> 这条捷径装的是仓库默认分支的源码。想跟着正式 Release 走自动更新，用下面「方式 A」里带 `#plugin-releases` 的地址。
-
-国内网络访问 GitHub 受限？上面那句里的地址可能连不上。插件渠道和代码在 GitCode 都有同步镜像：[gitcode.com/tanranran/zcode-token-usage-statusbar](https://gitcode.com/tanranran/zcode-token-usage-statusbar)，插件市场可以直接注册 GitCode 渠道，见下面「四种装法」的说明。
+> 安装来源为 `fanren88/zcode-usage-monitor#main`。本仓库尚未提供 `#plugin-releases` 正式更新渠道，⚙ 的 Release 自动更新当前不可用；更新方式见下文。
 
 [快速开始](#快速开始) · [这些数字是怎么来的](#这些数字是怎么来的) · [常见问题](#常见问题) · [功能截图](docs/features.md)
 
@@ -157,36 +147,29 @@ MCP 工具还支持 `days:N`、`sessions:N`、`models:days`、`session:<会话ID
 
 | 装法 | 适合谁 | 怎么做 |
 |---|---|---|
-| **A. 插件（推荐）** | 绝大多数人 | 在 ZCode 对话框敲两条 `/plugin` 命令，之后能在 ⚙ 里一键更新 |
+| **A. 插件（推荐）** | 绝大多数人 | 在 ZCode 对话框敲两条 `/plugin` 命令，从本仓库 `main` 安装 |
 | **B. 本地源码目录** | 想自己改代码的人 | 克隆仓库后，用「添加插件市场 → 选择目录」指到仓库根目录 |
 | **C. 一键安装器** | 不想装插件的人 | 终端里 `git clone` + `python install.py` |
 | **D. 自托管 Web** | 自己搭 ZCode 服务器的人 | [单独部署](web/README.zh-CN.md)，和上面三种不是一回事 |
 
 > 前三种都往同一个运行目录里装东西，**选一个就行，别叠着来**；第四种是自托管 Web，和桌面版完全不是一回事。
 
-> **国内访问 GitHub 受限？** 仓库在 GitCode 有一份同步镜像：[`tanranran/zcode-token-usage-statusbar`](https://gitcode.com/tanranran/zcode-token-usage-statusbar)。**A. 插件** 把市场注册地址换成 GitCode 渠道就行（见下面的命令，本机要装有 Git）；**B/C** 把克隆地址换成 GitCode 的。注册或克隆的是哪个地址，之后的检查更新和下载就走哪个，不用再碰 GitHub。
+> **安装来源：** 本仓库目前仅在 GitHub 维护。远程安装使用下方的 `#main` 地址；本地安装请从本仓库下载或克隆源码。
 
 #### A. 插件（推荐）
 
-开头那句自然语言指令，目的就是让 ZCode 替你走完下面两步；想自己手动来也行，在 **ZCode 对话输入框**依次执行：
+在 **ZCode 对话输入框**依次执行：
 
 ```text
-/plugin marketplace add ByteRax/zcode-token-usage-statusbar#plugin-releases
+/plugin marketplace add fanren88/zcode-usage-monitor#main
 /plugin install zcode-token-usage-statusbar@zusage-marketplace
 ```
 
-GitHub 访问受限时，把第一条换成 GitCode 渠道（结尾的 `.git` 不能省；这个走法要求本机装有 [Git](https://git-scm.com/downloads)）：
+也可以打开 **设置 → 插件 → 添加插件市场**，填写 `https://github.com/fanren88/zcode-usage-monitor#main`，添加后找到 **ZCode Token Usage Statusbar** 并安装。
 
-```text
-/plugin marketplace add https://gitcode.com/tanranran/zcode-token-usage-statusbar.git#plugin-releases-gitcode
-/plugin install zcode-token-usage-statusbar@zusage-marketplace
-```
+仓库名称为 **ZCode Usage Monitor**；为兼容原有配置，插件标识 `zcode-token-usage-statusbar`、市场名 `zusage-marketplace` 和 `/install-overlay` 命令保持原样。
 
-注册的是哪个地址，之后 ⚙ 里的「检查更新 / 立即更新」和自动更新就从哪里取：两条渠道装的是同一份经过校验的正式 Release 包，不会跟着开发分支乱跑。
-
-也可以走界面：**设置 → 插件 → 添加插件市场**，填上面任意一个渠道地址，添加后找到 **ZCode Token Usage Statusbar** 点安装。
-
-> **版本说明（2026-10-20）：** `#plugin-releases` 当前正式版是 [v1.5.2](https://github.com/ByteRax/zcode-token-usage-statusbar/releases/tag/v1.5.2)，已经包含默认自动安装/修复和下面的 SSH 远端支持。还在用旧版 `v1.4.1` 的请先按下面的更新步骤升级——旧版默认是关闭自动安装的，那种情况要手动敲一次 `/install-overlay`。
+> 本方式安装的是本仓库 `main` 分支源码。当前没有正式 Release，⚙ 的「检查更新 / 立即更新 / 自动更新」不适用于此安装来源。已注册上游同名市场的用户，请先按[切换到本仓库](docs/user-guide.md#切换已有市场到本仓库)确认并迁移来源，再安装本分支。
 
 #### B. 本地源码目录
 
@@ -199,7 +182,7 @@ GitHub 访问受限时，把第一条换成 GitCode 渠道（结尾的 `.git` �
 也可以在 ZCode 里敲：
 
 ```text
-/plugin marketplace add /绝对路径/到/zcode-token-usage-statusbar
+/plugin marketplace add /绝对路径/到/zcode-usage-monitor
 /plugin install zcode-token-usage-statusbar@zusage-marketplace
 ```
 
@@ -215,8 +198,8 @@ GitHub 访问受限时，把第一条换成 GitCode 渠道（结尾的 `.git` �
 先装好 [Python](https://www.python.org/downloads/) 和 [Git](https://git-scm.com/downloads)，在终端里：
 
 ```bash
-git clone https://github.com/ByteRax/zcode-token-usage-statusbar.git
-cd zcode-token-usage-statusbar
+git clone https://github.com/fanren88/zcode-usage-monitor.git
+cd zcode-usage-monitor
 python install.py
 ```
 
@@ -236,11 +219,11 @@ macOS 上要是没有 `python`，就写 `python3 install.py`。
 
 **以后怎么更新？**
 
-- **插件（正式渠道）**：在 ZCode 里敲 `/plugin marketplace update zusage-marketplace`，再去 **设置 → 插件 → 已安装** 更新这个插件。或者直接点 ⚙ 里的「检查更新 / 立即更新」。本地安全修复版默认关闭自动更新，可在 ⚙ 中主动开启。注册的是 GitCode 渠道的话，这套更新从版本检查到下载安装全部走 GitCode，⚙ 的「更新来源」会写明当前渠道。
-- **本地目录 / 源码分支**：⚙ 里的自动更新只认正式 Release。源码安装点它会提示"不支持自动更新"，请先 `git pull` 再重新安装，或按[切换到正式渠道](docs/user-guide.md#切换已有市场到正式渠道)迁移。
-- **一键安装器**：⚙ 里的「检查更新」只对插件安装有效。一键安装的更新就两步：进克隆目录 `git pull`（从哪个地址克隆的就从哪里拉，GitCode 镜像用户拉的就是 GitCode），再重跑一次 `python install.py`。
-- 更新装不上时，也可以把「更新zcode 插件 https://github.com/ByteRax/zcode-token-usage-statusbar」这句话直接发给 ZCode，让它帮你重装。
-- 更新完新建或重开会话；如果提示主进程文件变了，就完全退出再重开 ZCode。
+- **远程插件**：先确认市场来源是 `fanren88/zcode-usage-monitor#main`，执行 `/plugin marketplace update zusage-marketplace`，再到 **设置 → 插件 → 已安装** 更新；没有更新入口时，可让 ZCode 从本仓库重新安装。
+- **本地目录插件**：在 `zcode-usage-monitor` 源码目录执行 `git pull`，再刷新 `zusage-marketplace` 并重新安装插件。只修改或拉取仓库不会自动更新已安装副本。
+- **一键安装器**：在源码目录执行 `git pull`，再运行 `python install.py`（macOS 可用 `python3 install.py`）。
+- 也可以把「更新zcode 插件 https://github.com/fanren88/zcode-usage-monitor」发给 ZCode，让它从本仓库重新安装。
+- 本仓库尚无正式 Release，⚙ 自动更新当前不可用。更新后新建或恢复会话；主进程文件变化时完全退出并重开 ZCode。
 
 [更多安装、更新和排查 →](docs/user-guide.md#插件安装)
 
@@ -305,7 +288,7 @@ macOS 上要是没有 `python`，就写 `python3 install.py`。
 
 - **这不是 ZCode 官方功能**，是社区做的插件，和官方团队没有关系。状态条的实现方式是往客户端 `app.asar` 里注入。
 - **本地数据库是只读的。** 用量数据不会上传。
-- **但插件更新要联网**——从你配置好的来源下载代码。本地安全修复版默认关闭自动更新；SSH 自动发现也需显式配置 `remote.auto: true`。
+- **但插件更新要联网**——从你配置好的来源下载代码。本仓库安全加固版默认关闭自动更新；SSH 自动发现也需显式配置 `remote.auto: true`。
 - **用 SSH 远端查询也会联网**——经由你配好的通道在远端跑只读查询脚本。前提和限制见 [SSH 远端会话](#ssh-远端会话)。
 - **不会解密复用你的凭据。** ZCode 里存的密码、加密私钥、口令都不会被插件拿去解密使用，SSH key / agent 请自己配好。
 - **token 用量不等于账单。** 这里没有套餐费用、没有剩余额度、没有计费信息。

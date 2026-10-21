@@ -82,6 +82,9 @@ sheet / popover; changes apply immediately and are remembered.
 ## Install
 
 ```bash
+git clone https://github.com/fanren88/zcode-usage-monitor.git
+cd zcode-usage-monitor
+
 # 1) place the files
 sudo mkdir -p /opt/zcode-token-usage-statusbar
 sudo cp -r . /opt/zcode-token-usage-statusbar/     # whole repo; the sidecar uses ../zusage.py

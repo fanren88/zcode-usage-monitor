@@ -1,12 +1,12 @@
 # 安装、配置与排查
 
-> **本地安全修复版：** 本文涉及的关闭默认值与诊断收紧只适用于本地修复源码，尚未发布到上游正式 Release。请从本地源码安装；更新可能覆盖修复，已有显式开启的配置会保留。
+> **ZCode Usage Monitor 安全加固版：** 本文适用于 [fanren88/zcode-usage-monitor](https://github.com/fanren88/zcode-usage-monitor)。请从本仓库 `main` 安装；当前没有正式 Release 或 GitCode 镜像，已有显式开启的配置会保留。
 
 [返回首页](../README.zh-CN.md) · [功能截图](features.md) · [开发与发布](maintaining.md)
 
 这份文档面向需要自定义安装、远程查询或彻底清理的用户。日常使用通常不需要改配置文件。
 
-> **当前正式版：** `#plugin-releases` 正式渠道（核对 2026-10-20：v1.5.2）默认自动安装/修复状态条；配置文件不存在或缺少字段时开启，已有显式 `false` 会保留。安装/修复会修改客户端 `app.asar`，请确认信任此项目；成功后需完全退出并重开。
+> **自动安装默认值：** 本仓库插件默认自动安装/修复状态条；配置文件不存在或缺少字段时开启，已有显式 `false` 会保留。安装/修复会修改客户端 `app.asar`，成功后需完全退出并重开。
 
 ## 选择安装方式
 
@@ -20,25 +20,22 @@
 
 ### 方式一：远程安装（无需下载源码）
 
-通过客户端界面操作，无需系统 PATH 中有 `zcode`：
-
 1. 打开 **设置 → 插件 → 添加插件市场**；某些版本入口在「发现」页的 **+**。
-2. 输入 `https://github.com/ByteRax/zcode-token-usage-statusbar#plugin-releases`，添加市场。
+2. 输入 `https://github.com/fanren88/zcode-usage-monitor#main`，添加市场。
 3. 找到 **ZCode Token Usage Statusbar**，安装到用户范围并启用。
 
-GitHub 访问受限时，第 2 步改用 GitCode 渠道地址（结尾 `.git` 不能省，本机需装有 Git）：
+也可以在 **ZCode 对话输入框**依次执行：
 
 ```text
-https://gitcode.com/tanranran/zcode-token-usage-statusbar.git#plugin-releases-gitcode
+/plugin marketplace add fanren88/zcode-usage-monitor#main
+/plugin install zcode-token-usage-statusbar@zusage-marketplace
 ```
 
-两条渠道提供同一份经过校验的正式 Release；注册哪个地址，之后的版本检查和下载就在哪个渠道进行，⚙ 面板的「更新来源」会显示当前渠道。
-
-此渠道从经过校验的正式 Release ZIP 安装插件，不跟随开发分支，也不需要自己下载源码。当前正式版默认自动安装/修复状态条；成功后完全退出并重开，已有显式关闭配置不会被改为开启。
+此来源安装本仓库 `main` 源码，默认自动安装/修复状态条；成功后完全退出并重开。仓库改名不改变插件标识 `zcode-token-usage-statusbar` 与市场名 `zusage-marketplace`。此源码来源当前不支持 ⚙ Release 自动更新。
 
 ### 方式二：本地目录安装
 
-从 [ByteRax 仓库](https://github.com/ByteRax/zcode-token-usage-statusbar) 下载或克隆源码后：
+从 [本仓库](https://github.com/fanren88/zcode-usage-monitor) 下载或克隆源码后：
 
 1. 打开 **设置 → 插件 → 添加插件市场**，点击 **选择目录**。
 2. 选择包含 `marketplace.json` 的仓库根目录（不是 `plugins/` 子目录），添加市场。
@@ -62,38 +59,28 @@ https://gitcode.com/tanranran/zcode-token-usage-statusbar.git#plugin-releases-gi
 
 Windows 若找不到 `python3`，需在插件的 `.mcp.json` 与 `hooks/hooks.json` 中改用可用的 Python 命令，再刷新安装；只改仓库不会改变已安装副本。
 
-### 正式 Release 渠道
+### 当前安装与更新来源
 
-[`plugin-releases` 分支](https://github.com/ByteRax/zcode-token-usage-statusbar/tree/plugin-releases) 的市场清单指向当前正式 Release。新用户请在添加市场界面使用 `https://github.com/ByteRax/zcode-token-usage-statusbar#plugin-releases`，具体版本以该清单为准。
+本仓库目前仅提供 `main` 源码，没有 `#plugin-releases` 正式渠道或 GitCode 镜像。安装时使用 `fanren88/zcode-usage-monitor#main`，源码根目录的 `marketplace.json` 保持本地插件子目录引用。⚙ 更新器只接受经过校验的正式 Release，因此此来源暂不支持自动更新；手动更新步骤见下文。
 
-GitHub 访问受限时可注册 GitCode 镜像渠道 `https://gitcode.com/tanranran/zcode-token-usage-statusbar.git#plugin-releases-gitcode`：清单由同一份发布产物生成，ZIP 与 SHA256 和 GitHub Release 完全一致，版本检查、下载与安装全部在 GitCode 完成。该渠道要求本机装有 Git（宿主通过 git 拉取渠道清单）。
+### 切换已有市场到本仓库
 
-清单指向正式 ZIP，包含 SHA256 与插件子目录；下载时核对 Release manifest、版本、包内容和清单一致性，不回退开发分支。后续正式版本仍需维护者同步发布渠道清单，单独发布 Release 不等于渠道已经更新。
+本仓库沿用 `zusage-marketplace` 市场名和原插件标识。已经注册过上游同名市场时，仅执行安装命令不一定会改变来源，请先确认并迁移：
 
-默认 `main` 的市场清单仍用于源码安装，本地目录也保持原用法；不要把正式渠道清单复制到自己的源码根目录。私有仓库认证下载和 GitHub/GitCode 之外的远端自动更新不支持。发布操作见 [维护文档](maintaining.md#发布插件)。
+1. 关闭插件自动更新，等待正在进行的更新结束，并记录现有市场来源。
+2. 打开 **设置 → 插件 → 发现 → +（添加插件市场）**，填写 `https://github.com/fanren88/zcode-usage-monitor#main`。
+3. 在市场管理中确认 `zusage-marketplace` 来源为 `fanren88/zcode-usage-monitor`、`ref` 为 `main`，再刷新市场并更新或重新安装本插件。
+4. 主进程文件变化后完全退出并重开 ZCode。当前保持自动更新关闭，使用本仓库源码更新方式。
 
-### 切换已有市场到正式渠道
-
-市场名仍是 `zusage-marketplace`，但来源从默认分支/本地目录变为 `#plugin-releases`。**已安装用户不会自动切换，也不必为了添加分支卸载浮层。** 想迁移时：
-
-1. 先关闭插件自动更新，等待正在进行的更新结束，记下现有市场来源。
-2. 打开 **设置 → 插件 → 发现 → +（添加插件市场）**，填写 `https://github.com/ByteRax/zcode-token-usage-statusbar#plugin-releases`。通过市场管理确认并切换同名市场来源；不支持同名来源替换时，先移除旧市场注册再添加正式地址，**无需卸载插件或浮层**。
-3. 在市场管理中确认 `zusage-marketplace` 指向新地址，来源的 `ref` 为 `plugin-releases`，再刷新市场并在插件页按需更新。不要只看到插件已安装就假定来源已切换。
-4. 确认正式包可读取后，按自己的偏好开启自动更新。更新涉及主进程文件时，完全退出并重开 ZCode。
-
-如果客户端版本不支持同名来源替换，可先移除旧市场注册再添加正式地址；**移除市场与卸载插件是不同操作**。不要执行卸载命令来替代来源迁移。
-
-要从 GitHub 渠道迁到 GitCode 镜像渠道（或反向），用同样步骤把来源地址换成目标渠道即可；迁移前后插件版本相同，无需重装，迁移后 ⚙ 的「更新来源」显示新渠道即成功。
-
-迁移操作须由你明确选择；本项目不会静默修改个人市场注册、删除设置或移动本地源码。
+如果客户端不支持同名来源替换，可先移除旧市场注册，再添加本仓库地址；移除市场与卸载插件是不同操作，无需为迁移来源执行 `/uninstall-overlay`。迁移应由用户明确选择，本项目不会静默修改个人市场注册或删除设置。
 
 ## 一键安装
 
 不通过插件时，先安装 Python 和 Git，在系统终端执行：
 
 ```bash
-git clone https://github.com/ByteRax/zcode-token-usage-statusbar.git
-cd zcode-token-usage-statusbar
+git clone https://github.com/fanren88/zcode-usage-monitor.git
+cd zcode-usage-monitor
 python install.py
 ```
 
@@ -135,26 +122,16 @@ python3 install.py --root /Applications/ZCode.app
 
 ### 插件更新
 
-正式渠道可在 ⚙ 检查或安装更新，也可以按以下步骤手动更新：
+本仓库当前使用 `main` 源码安装，按以下步骤手动更新：
 
-1. 远程安装无需更新本地源码；本地目录安装需先自行获取最新源码。
-2. 打开 **设置 → 插件**，在市场管理中刷新 `zusage-marketplace`。
-3. 到 **已安装** 更新 **ZCode Token Usage Statusbar**。
-4. 新建或恢复会话；若提示主进程文件变化，再完全退出并重开 ZCode。
+1. 远程安装先确认市场来源为 `fanren88/zcode-usage-monitor#main`；本地目录安装先在源码目录执行 `git pull`。
+2. 在 ZCode 执行 `/plugin marketplace update zusage-marketplace`，或到插件设置中刷新市场。
+3. 到 **已安装** 更新 **ZCode Token Usage Statusbar**；没有更新入口时，让 ZCode 从本仓库重新安装。
+4. 新建或恢复会话；主进程文件变化后完全退出并重开 ZCode。
 
-本地目录市场**不会执行 `git pull`**。ZCode 使用的是独立安装副本，修改仓库不等于完成插件更新。
+本地目录市场不会自动执行 `git pull`，修改源码也不等于更新已安装副本。本仓库尚无正式 Release，⚙ 的「检查更新 / 立即更新 / 自动更新」当前不可用；`plugin_auto_update` 默认关闭，已有显式配置保留。
 
-状态条 **⚙ → 插件更新** 还提供「检查更新」「立即更新」和「自动更新」：
-
-- **检查更新**不会安装；发现新版后可点「立即更新」。
-- **本地安全修复版默认关闭自动更新**，仅 `plugin_auto_update: true` 时才按 24 小时间隔检测与安装；缺配置/缺字段不会联网检查，已有显式开启或关闭的设置保留。手动检查/立即更新仍可用。
-- GitHub 来源需正式 Release 与市场清单一致；新远程安装使用 `#plugin-releases`。源码分支或本地目录安装没有可校验的 Release，点「检查更新」会直接提示"不支持自动更新"，不会回退到开发分支取包：先 `git pull` 重装，或迁移到正式渠道。
-- GitCode 渠道的版本检查读宿主从注册 ref 拉取的渠道清单，ZIP 从 GitCode Release 资产下载并核对 SHA256；渠道清单与资产不一致时直接报错，不做自动重试。
-- 更新区固定显示一句可直接复制的重装指令：「更新zcode 插件 https://github.com/ByteRax/zcode-token-usage-statusbar」。更新失败时把它发给 ZCode，让助手帮你重装。
-- 更新代码会访问已注册来源，不上传用量数据；来源错误或网络失败会显示原因。
-- 只支持本插件的用户级安装；不会替你启用已禁用的插件。
-
-自动或手动更新成功后，都需按提示重开会话或重启客户端。
+可将「更新zcode 插件 https://github.com/fanren88/zcode-usage-monitor」发给 ZCode，从本仓库重新安装。更新会下载源码，不上传用量数据，也不会替你启用已禁用的插件。
 
 ### ZCode 升级后状态条消失
 

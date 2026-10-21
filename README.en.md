@@ -1,12 +1,4 @@
-> **ZCode Usage Monitor — hardened source branch:** `fanren88/zcode-usage-monitor` is based on [ByteRax/zcode-token-usage-statusbar](https://github.com/ByteRax/zcode-token-usage-statusbar), retaining the original attribution and MIT license. It includes privacy fixes, trusted-window checks, refresh optimizations and stale-data indicators; internal plugin identifiers remain compatible. This branch has no official Release yet. Upstream update channels referenced below do not contain these fixes. Install this branch from source:
-
-```bash
-git clone https://github.com/fanren88/zcode-usage-monitor.git
-cd zcode-usage-monitor
-python3 install.py
-```
-
-Quit ZCode completely and reopen it after installation. On Windows, use `python` if `python3` is unavailable.
+> **ZCode Usage Monitor — hardened edition:** `fanren88/zcode-usage-monitor` is based on [ByteRax/zcode-token-usage-statusbar](https://github.com/ByteRax/zcode-token-usage-statusbar), retaining the original attribution and MIT license. All installation and update instructions below use this repository’s `main` source branch. This repository currently has no stable Release or GitCode mirror.
 
 <div align="center">
 
@@ -14,7 +6,7 @@ Quit ZCode completely and reopen it after installation. On Windows, use `python`
 
 > **Local desktop improvements:** Local-window and main-frame checks now cover the desktop bridge. Subscription snapshots are reused and hidden pages pause visual polling. Failed queries show stale/unavailable status and the last successful refresh time. These changes do not update an already installed client.
 
-# ZCode Token Speed Status Bar
+# ZCode Usage Monitor · Token Usage Status Bar
 
 **Adds a small status bar to the bottom of your ZCode chat window: how fast the model is going, how many tokens you've spent, how much context is left — all at a glance.**
 
@@ -35,14 +27,12 @@ Windows / macOS · Python 3.8+ · [MIT](LICENSE)
 Send this to ZCode:
 
 ```text
-Install or update the ZCode plugin https://github.com/ByteRax/zcode-token-usage-statusbar, then run /install-overlay when it's done
+Install or update the ZCode plugin https://github.com/fanren88/zcode-usage-monitor, then run /install-overlay when it's done
 ```
 
 It installs the plugin, then runs `/install-overlay` to put the bar in place — if it doesn't run it for you, type it in the chat yourself. Then **quit ZCode completely and reopen it** (closing the window doesn't count); the little bar shows up at the bottom. Full details in [Quick start](#quick-start).
 
-> This shortcut installs source from the default branch. To follow stable Releases and get automatic updates, use the `#plugin-releases` address in Method A below.
-
-Can't reach GitHub from your network (mainland China)? The URL above probably won't load either. Both the plugin channel and the code have a synced mirror on GitCode: [gitcode.com/tanranran/zcode-token-usage-statusbar](https://gitcode.com/tanranran/zcode-token-usage-statusbar). The plugin marketplace can be registered straight from the GitCode channel — see the four install methods below.
+> This installs `fanren88/zcode-usage-monitor#main`. This repository has no `#plugin-releases` channel yet, so Release updates in ⚙ are currently unavailable. Use the source update instructions below.
 
 [Quick start](#quick-start) · [Where these numbers come from](#where-these-numbers-come-from) · [FAQ](#faq) · [Screenshots](docs/features.md)
 
@@ -157,36 +147,29 @@ Remote support covers **the bar's own data fetching** only. MCP, `/usage` and th
 
 | Method | Who it's for | How |
 |---|---|---|
-| **A. The plugin (recommended)** | Almost everyone | Two `/plugin` commands in ZCode, then updates from the ⚙ panel |
+| **A. The plugin (recommended)** | Almost everyone | Two `/plugin` commands in ZCode, installing from this repository’s `main` branch |
 | **B. Local source directory** | People who want to change the code | Clone the repo and point "Add marketplace → Choose directory" at the repo root |
 | **C. One-command installer** | People who'd rather not install a plugin | `git clone` + `python install.py` in a terminal |
 | **D. Self-hosted Web** | People running their own ZCode server | [Deploy it separately](web/README.md) — not the same thing as the three above |
 
 > The first three all write into the same runtime directory — **pick one, don't stack them**. The fourth is a self-hosted Web deployment, which is a completely different thing from the desktop bar.
 
-> **Can't reach GitHub (mainland China networks)?** The repo has a synced mirror on GitCode: [`tanranran/zcode-token-usage-statusbar`](https://gitcode.com/tanranran/zcode-token-usage-statusbar). For **A. The plugin**, register the marketplace from the GitCode channel instead (command below; requires local [Git](https://git-scm.com/downloads)). For **B/C**, clone from GitCode. Whichever address you register or clone from is where update checks and downloads happen — GitHub never gets touched.
+> **Installation source:** This repository is currently maintained on GitHub only. Use the `#main` address below for remote installation, or download/clone this repository for a local installation.
 
 #### A. The plugin (recommended)
 
-The plain-language sentence at the top is just a shortcut for these two steps. To do it by hand, enter these in **ZCode's chat input**, in order:
+Enter these in **ZCode’s chat input**, in order:
 
 ```text
-/plugin marketplace add ByteRax/zcode-token-usage-statusbar#plugin-releases
+/plugin marketplace add fanren88/zcode-usage-monitor#main
 /plugin install zcode-token-usage-statusbar@zusage-marketplace
 ```
 
-If GitHub is unreachable from your network, swap the first line for the GitCode channel (the trailing `.git` is required; this route needs [Git](https://git-scm.com/downloads) installed):
+Or open **Settings → Plugin → Add marketplace**, enter `https://github.com/fanren88/zcode-usage-monitor#main`, then find and install **ZCode Token Usage Statusbar**.
 
-```text
-/plugin marketplace add https://gitcode.com/tanranran/zcode-token-usage-statusbar.git#plugin-releases-gitcode
-/plugin install zcode-token-usage-statusbar@zusage-marketplace
-```
+The repository is named **ZCode Usage Monitor**. For compatibility, the plugin ID `zcode-token-usage-statusbar`, marketplace name `zusage-marketplace` and `/install-overlay` command keep their existing names.
 
-Whichever address you register is where ⚙ **Check for updates / Update now** and automatic updates fetch from: both channels serve the same checksum-verified stable Release packages, never a development branch.
-
-You can also use the UI: **Settings → Plugin → Add marketplace**, enter either channel address above, then find and install **ZCode Token Usage Statusbar**.
-
-> **Version note (2026-10-20):** The `#plugin-releases` channel currently provides [v1.5.2](https://github.com/ByteRax/zcode-token-usage-statusbar/releases/tag/v1.5.2), which already includes the automatic install/repair described above and the SSH remote support below. If you're still on the older `v1.4.1`, update as described further down first — that version defaults automatic installation to *off*, so you'd have to run `/install-overlay` by hand.
+> This installs source from this repository’s `main` branch. There is no stable Release yet, so ⚙ **Check for updates / Update now / Automatic updates** are unavailable for this source. If you already registered the upstream marketplace with the same name, [switch it to this repository](docs/user-guide.md#切换已有市场到本仓库) (Chinese) before installing this branch.
 
 #### B. Local source directory
 
@@ -199,7 +182,7 @@ Download or clone this repository, then:
 Or type this in ZCode:
 
 ```text
-/plugin marketplace add /absolute/path/to/zcode-token-usage-statusbar
+/plugin marketplace add /absolute/path/to/zcode-usage-monitor
 /plugin install zcode-token-usage-statusbar@zusage-marketplace
 ```
 
@@ -215,8 +198,8 @@ Or type this in ZCode:
 Install [Python](https://www.python.org/downloads/) and [Git](https://git-scm.com/downloads), then in a terminal:
 
 ```bash
-git clone https://github.com/ByteRax/zcode-token-usage-statusbar.git
-cd zcode-token-usage-statusbar
+git clone https://github.com/fanren88/zcode-usage-monitor.git
+cd zcode-usage-monitor
 python install.py --lang en
 ```
 
@@ -236,11 +219,11 @@ They're three separate things, and missing any one of them makes it look like "I
 
 **How do I update it later?**
 
-- **Plugin (stable channel)**: type `/plugin marketplace update zusage-marketplace` in ZCode, then update the plugin under **Settings → Plugin → Installed**. Or just use ⚙ → **Check for updates / Update now** — automatic updates are off by default in this locally hardened checkout and can be enabled in ⚙. If you registered the GitCode channel, this whole flow — version check through download and install — runs on GitCode, and the ⚙ source line names the channel in use.
-- **Local directory / source branch**: the updater in ⚙ only follows stable Releases. On a source install it reports that automatic updates aren't available — run `git pull` and reinstall, or [switch the marketplace to the stable channel](docs/user-guide.md#切换已有市场到正式渠道) (Chinese).
-- **One-command installer**: the ⚙ **Check for updates** only works for plugin installs. Updating is two steps — `git pull` inside the clone (it pulls from wherever you cloned from, so GitCode mirror users pull from GitCode), then rerun `python install.py`.
-- If an update won't go through, you can also send "更新zcode 插件 https://github.com/ByteRax/zcode-token-usage-statusbar" to ZCode and let it reinstall for you.
-- Start or reopen a session afterwards. If prompted about changed main-process files, quit ZCode completely and reopen it.
+- **Remote plugin**: confirm the marketplace source is `fanren88/zcode-usage-monitor#main`, run `/plugin marketplace update zusage-marketplace`, then update under **Settings → Plugin → Installed**. If no update action is offered, ask ZCode to reinstall from this repository.
+- **Local directory plugin**: run `git pull` in the `zcode-usage-monitor` source directory, refresh `zusage-marketplace` and reinstall the plugin. Pulling or editing the repository does not automatically update the installed copy.
+- **One-command installer**: run `git pull` in the source directory, then `python install.py` (or `python3 install.py` on macOS).
+- You can also send “Update the ZCode plugin https://github.com/fanren88/zcode-usage-monitor” to ZCode to reinstall from this repository.
+- This repository has no stable Release, so automatic updates in ⚙ are currently unavailable. Start or resume a session afterwards; fully quit and reopen ZCode when main-process files change.
 
 [More installation, updates and troubleshooting →](docs/user-guide.md#插件安装) (Chinese)
 

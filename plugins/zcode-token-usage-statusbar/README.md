@@ -1,29 +1,29 @@
-# ZCode Token Usage Statusbar
+# ZCode Usage Monitor
 
-> **本地安全修复版：** 修复尚未发布到上游正式渠道。请使用本地源码安装；正式渠道更新可能覆盖修复。默认关闭自动更新与 SSH 自动发现；已有显式开启设置保留。诊断不转储 localStorage 值，数据库连接始终只读。
+> **本仓库安全加固版：** 源码来自 [fanren88/zcode-usage-monitor](https://github.com/fanren88/zcode-usage-monitor)。默认关闭自动更新与 SSH 自动发现；已有显式开启设置保留。诊断不转储 localStorage 值，数据库连接始终只读。插件内部标识保持为 `zcode-token-usage-statusbar`。
 
 在 ZCode 对话里查看生成速度、token 用量和上下文容量。
 
 本插件提供用量查询与回答速率；安装/修复悬浮状态条会修改客户端 `app.asar`，成功后需完全退出并重开。用量数据不上传，插件更新会从已配置的来源下载代码。
 
-> **自动安装默认值：** 正式渠道与本地源码插件都**默认开启**状态条自动安装/修复。配置文件不存在或缺少 `plugin_auto_install_overlay` 字段时启用，已有的显式 `false` 会保留。只需要查询与回答速率时，执行 `/uninstall-overlay`，或在下述配置文件中合并 `"plugin_auto_install_overlay": false`。
+> **自动安装默认值：** 本仓库的远程与本地源码安装都**默认开启**状态条自动安装/修复。配置文件不存在或缺少 `plugin_auto_install_overlay` 字段时启用，已有的显式 `false` 会保留。只需要查询与回答速率时，执行 `/uninstall-overlay`，或在下述配置文件中合并 `"plugin_auto_install_overlay": false`。
 
 ## 安装
 
-### 远程正式渠道
+### 远程源码安装
 
 在 ZCode 对话输入框执行：
 
 ```text
-/plugin marketplace add ByteRax/zcode-token-usage-statusbar#plugin-releases
+/plugin marketplace add fanren88/zcode-usage-monitor#main
 /plugin install zcode-token-usage-statusbar@zusage-marketplace
 ```
 
-此渠道使用正式 Release 包；已从本地目录或默认分支添加过同名市场时，可重新执行添加命令切换来源，之后确认市场的 `ref` 为 `plugin-releases`。插件不会自行迁移你的市场注册。
+此来源使用本仓库 `main` 源码，目前没有 `#plugin-releases` 正式渠道。也可以在添加市场界面填写 `https://github.com/fanren88/zcode-usage-monitor#main`。已有同名市场时，先确认并切换其来源到本仓库；插件不会自动迁移个人市场注册。
 
 ### 本地目录
 
-使用包含 `marketplace.json` 的源码版本，打开 **设置 → 插件 → 添加插件市场**，点击 **选择目录**，选择仓库根目录，安装并启用 **ZCode Token Usage Statusbar**。
+从 [本仓库](https://github.com/fanren88/zcode-usage-monitor) 下载或克隆包含 `marketplace.json` 的源码版本，打开 **设置 → 插件 → 添加插件市场**，点击 **选择目录**，选择仓库根目录，安装并启用 **ZCode Token Usage Statusbar**。
 
 ### 安装状态条
 
@@ -87,11 +87,11 @@
 
 ## 更新
 
-在 ⚙ 点击「检查更新」或「立即更新」。本地安全修复版默认关闭自动更新；仅显式 `plugin_auto_update: true` 才每 24 小时检查一次，已有显式设置保留。
+本仓库尚无正式 Release，⚙ 的「检查更新 / 立即更新 / 自动更新」当前不可用；`plugin_auto_update` 默认关闭，已有显式设置保留。
 
-本地市场不会自动 `git pull`。先自行更新源码，然后刷新 `zusage-marketplace` 并在插件页更新本插件；修改仓库不会自动修改安装缓存。GitHub 更新只使用正式 Release，包与市场清单必须一致。
+远程市场先确认来源为 `fanren88/zcode-usage-monitor#main`，执行 `/plugin marketplace update zusage-marketplace` 后，在插件页更新或重新安装。本地市场需先在 `zcode-usage-monitor` 目录执行 `git pull`，再刷新市场并重新安装；只修改仓库不会自动修改安装缓存。
 
-更新后重开会话；主进程文件变化时按提示完全重启客户端。ZCode 升级可能移除状态条，插件默认自动修复，失败时再运行安装命令兜底。
+也可以把「更新zcode 插件 https://github.com/fanren88/zcode-usage-monitor」发给 ZCode。更新后重开会话；主进程文件变化时按提示完全重启客户端。ZCode 升级可能移除状态条，插件默认自动修复，失败时再运行安装命令兜底。
 
 ## 卸载
 
@@ -107,7 +107,7 @@
 默认运行配置在 `~/.zcode/zcode-token-usage-statusbar/config.json`。保留原有设置，只修改需要的字段：
 
 - `answer_rate_line: false`：关闭回答速率行。
-- `plugin_auto_update: false`：关闭插件自动更新（本地安全修复版的缺省值）；显式 true 才开启。
+- `plugin_auto_update: false`：关闭插件自动更新（本仓库安全加固版的缺省值）；显式 true 才开启。
 - `plugin_auto_install_overlay: false`：关闭新建/恢复会话时自动安装/修复状态条；默认开，成功后仍需完全退出并重开。
 
 Windows 若没有 `python3`，需要把 `.mcp.json` 和 `hooks/hooks.json` 中的 Python 命令改成可用的名称，再刷新安装。
